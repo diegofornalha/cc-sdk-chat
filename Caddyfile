@@ -1,0 +1,64 @@
+# Configuração do Caddy para chat.agentesintegrados.com
+
+chat.agentesintegrados.com {
+    # Configuração para o Frontend (Next.js)
+    handle /* {
+        reverse_proxy localhost:3020 {
+            # Headers para Next.js
+            header_up Host {http.request.host}
+            header_up X-Real-IP {http.request.remote}
+            header_up X-Forwarded-For {http.request.remote}
+            header_up X-Forwarded-Proto {http.request.scheme}
+        }
+    }
+    
+    # Configuração para a API
+    handle /api/* {
+        reverse_proxy localhost:8002 {
+            # Headers para API
+            header_up Host {http.request.host}
+            header_up X-Real-IP {http.request.remote}
+            header_up X-Forwarded-For {http.request.remote}
+            header_up X-Forwarded-Proto {http.request.scheme}
+            
+            # Configurações para SSE (Server-Sent Events)
+            flush_interval -1
+            transport http {
+                read_buffer 0
+                write_buffer 0
+            }
+        }
+    }
+    
+    # WebSocket support para hot-reload do Next.js (desenvolvimento)
+    handle /_next/webpack-hmr {
+        reverse_proxy localhost:3020 {
+            header_up Upgrade {http.request.header.Upgrade}
+            header_up Connection {http.request.header.Connection}
+        }
+    }
+    
+    # HTTPS automático com Let's Encrypt
+    tls {
+        # Caddy gerencia certificados automaticamente
+    }
+    
+    # Headers de segurança
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+    
+    # Logs
+    log {
+        output file /var/log/caddy/chat.agentesintegrados.com.log {
+            roll_size 10mb
+            roll_keep 10
+        }
+    }
+    
+    # Compressão
+    encode gzip zstd
+}

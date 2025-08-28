@@ -31,8 +31,24 @@ class ChatAPI {
     private sessionId: string | null = null;
     private eventSource: EventSource | null = null;
 
-    constructor(baseUrl: string = 'http://localhost:8002') {
-        this.baseUrl = baseUrl;
+    constructor(baseUrl?: string) {
+        // Detecta automaticamente a URL baseado no ambiente
+        if (baseUrl) {
+            this.baseUrl = baseUrl;
+        } else if (typeof window !== 'undefined') {
+            // No browser, usa a mesma origem ou localhost para desenvolvimento
+            const host = window.location.hostname;
+            if (host === 'chat.agentesintegrados.com') {
+                // Em produção, usa a mesma origem (Caddy fará o proxy)
+                this.baseUrl = '';
+            } else {
+                // Em desenvolvimento, usa localhost
+                this.baseUrl = 'http://localhost:8002';
+            }
+        } else {
+            // SSR ou ambiente Node.js
+            this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
+        }
     }
 
     async createSession(): Promise<string> {

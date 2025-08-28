@@ -5,12 +5,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from fastapi import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import asyncio
 import json
 import uuid
 
-from claude_handler import ClaudeHandler
+from claude_handler import ClaudeHandler, SessionConfig
 
 app = FastAPI(
     title="Claude Chat API",
@@ -75,7 +75,12 @@ app = FastAPI(
 # Configuração CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3020", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3020", 
+        "http://localhost:3000",
+        "https://chat.agentesintegrados.com",
+        "http://chat.agentesintegrados.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -140,6 +145,32 @@ class StreamEvent(BaseModel):
     content: Optional[str] = Field(None, description="Conteúdo da mensagem", example="Olá! Como posso ajudar?")
     session_id: str = Field(..., description="ID da sessão", example="550e8400-e29b-41d4-a716-446655440000")
     error: Optional[str] = Field(None, description="Mensagem de erro se houver")
+
+class SessionConfigRequest(BaseModel):
+    """Configuração para criar ou atualizar uma sessão."""
+    system_prompt: Optional[str] = Field(None, description="System prompt para a sessão", example="Você é um assistente útil")
+    allowed_tools: Optional[List[str]] = Field(default_factory=list, description="Ferramentas permitidas", example=["Read", "Write", "Bash"])
+    max_turns: Optional[int] = Field(None, description="Número máximo de turnos", example=10)
+    permission_mode: str = Field('acceptEdits', description="Modo de permissão para edições", example="acceptEdits")
+    cwd: Optional[str] = Field(None, description="Diretório de trabalho", example="/home/user/projeto")
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "system_prompt": "Você é um assistente especializado em Python",
+                "allowed_tools": ["Read", "Write", "Bash"],
+                "max_turns": 10,
+                "permission_mode": "acceptEdits",
+                "cwd": "/home/user/projeto"
+            }
+        }
+
+class SessionInfoResponse(BaseModel):
+    """Informações detalhadas de uma sessão."""
+    session_id: str
+    active: bool
+    config: Dict[str, Any]
+    history: Dict[str, Any]
 
 @app.get(
     "/",
@@ -340,6 +371,163 @@ async def delete_session(session_id: str = Path(..., description="ID único da s
     """Remove permanentemente uma sessão."""
     await claude_handler.destroy_session(session_id)
     return StatusResponse(status="deleted", session_id=session_id)
+
+@app.post(
+    "/api/session-with-config",
+    tags=["Sessões"],
+    summary="Criar Sessão com Configuração",
+    description="""Cria uma nova sessão com configurações específicas.
+    
+    Permite definir system prompt, ferramentas permitidas, diretório de trabalho e outras opções.
+    """,
+    response_description="ID da nova sessão criada",
+    responses={
+        200: {
+            "description": "Sessão criada com configurações",
+            "content": {
+                "application/json": {
+                    "example": {"session_id": "uuid"}
+                }
+            }
+        }
+    },
+    response_model=SessionResponse
+)
+async def create_session_with_config(config: SessionConfigRequest) -> SessionResponse:
+    """Cria uma sessão com configurações específicas."""
+    session_id = str(uuid.uuid4())
+    
+    session_config = SessionConfig(
+        system_prompt=config.system_prompt,
+        allowed_tools=config.allowed_tools,
+        max_turns=config.max_turns,
+        permission_mode=config.permission_mode,
+        cwd=config.cwd
+    )
+    
+    await claude_handler.create_session(session_id, session_config)
+    return SessionResponse(session_id=session_id)
+
+@app.put(
+    "/api/session/{session_id}/config",
+    tags=["Sessões"],
+    summary="Atualizar Configuração da Sessão",
+    description="""Atualiza a configuração de uma sessão existente.
+    
+    A sessão será recriada com as novas configurações mas o histórico será mantido.
+    """,
+    response_description="Confirmação de atualização",
+    responses={
+        200: {
+            "description": "Configuração atualizada",
+            "content": {
+                "application/json": {
+                    "example": {"status": "updated", "session_id": "uuid"}
+                }
+            }
+        },
+        404: {
+            "description": "Sessão não encontrada"
+        }
+    },
+    response_model=StatusResponse
+)
+async def update_session_config(
+    session_id: str = Path(..., description="ID da sessão"),
+    config: SessionConfigRequest = ...
+) -> StatusResponse:
+    """Atualiza configuração de uma sessão."""
+    session_config = SessionConfig(
+        system_prompt=config.system_prompt,
+        allowed_tools=config.allowed_tools,
+        max_turns=config.max_turns,
+        permission_mode=config.permission_mode,
+        cwd=config.cwd
+    )
+    
+    success = await claude_handler.update_session_config(session_id, session_config)
+    if not success:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return StatusResponse(status="updated", session_id=session_id)
+
+@app.get(
+    "/api/session/{session_id}",
+    tags=["Sessões"],
+    summary="Obter Informações da Sessão",
+    description="""Retorna informações detalhadas sobre uma sessão específica.
+    
+    Inclui configurações, estatísticas de uso e status.
+    """,
+    response_description="Informações da sessão",
+    responses={
+        200: {
+            "description": "Informações da sessão",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "session_id": "uuid",
+                        "active": True,
+                        "config": {
+                            "system_prompt": "...",
+                            "allowed_tools": ["Read", "Write"],
+                            "created_at": "2024-01-01T00:00:00"
+                        },
+                        "history": {
+                            "message_count": 10,
+                            "total_tokens": 1000,
+                            "total_cost": 0.05
+                        }
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Sessão não encontrada"
+        }
+    },
+    response_model=SessionInfoResponse
+)
+async def get_session_info(session_id: str = Path(..., description="ID da sessão")) -> SessionInfoResponse:
+    """Obtém informações detalhadas de uma sessão."""
+    info = await claude_handler.get_session_info(session_id)
+    
+    if "error" in info:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return SessionInfoResponse(**info)
+
+@app.get(
+    "/api/sessions",
+    tags=["Sessões"],
+    summary="Listar Todas as Sessões",
+    description="""Retorna lista de todas as sessões ativas com suas informações.
+    
+    Útil para monitoramento e gerenciamento de múltiplas conversas.
+    """,
+    response_description="Lista de sessões",
+    responses={
+        200: {
+            "description": "Lista de sessões ativas",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "session_id": "uuid1",
+                            "active": True,
+                            "config": {"system_prompt": "..."},
+                            "history": {"message_count": 5}
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
+async def list_sessions() -> List[SessionInfoResponse]:
+    """Lista todas as sessões ativas."""
+    sessions = await claude_handler.get_all_sessions()
+    return [SessionInfoResponse(**session) for session in sessions]
 
 if __name__ == "__main__":
     import uvicorn
