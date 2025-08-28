@@ -1,0 +1,3 @@
+[submodule "api/claude-code-sdk-python"]
+	path = api/claude-code-sdk-python
+	url = https://github.com/diegofornalha/claude-code-sdk-python.git
