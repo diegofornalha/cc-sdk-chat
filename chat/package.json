@@ -1,0 +1,39 @@
+{
+  "name": "StreamingMarkdown",
+  "version": "1.0.0",
+  "description": "Task: Make a streaming Markdown parser.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev -p 3020",
+    "build": "next build",
+    "start": "next start -p 3020",
+    "lint": "next lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anysphere/streaming-markdown-parser.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/anysphere/streaming-markdown-parser/issues"
+  },
+  "homepage": "https://github.com/anysphere/streaming-markdown-parser#readme",
+  "devDependencies": {
+    "@types/marked": "^5.0.2",
+    "@types/node": "^20.17.10",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "marked": "^9.0.0",
+    "next": "^14.0.3",
+    "next-themes": "^0.2.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
