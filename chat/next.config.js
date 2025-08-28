@@ -10,7 +10,7 @@ const nextConfig = {
   
   // Configurações de servidor
   server: {
-    port: 3020,
+    port: 3040,
     hostname: '0.0.0.0'
   },
   

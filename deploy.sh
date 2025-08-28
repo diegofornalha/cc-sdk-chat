@@ -39,9 +39,9 @@ case $option in
         echo "✅ Containers iniciados!"
         echo ""
         echo "📍 Acesse:"
-        echo "   Frontend: http://localhost:3020"
-        echo "   API: http://localhost:8002"
-        echo "   API Docs: http://localhost:8002/docs"
+        echo "   Frontend: http://localhost:3040"
+        echo "   API: http://localhost:8989"
+        echo "   API Docs: http://localhost:8989/docs"
         ;;
     
     2)

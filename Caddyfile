@@ -1,9 +1,9 @@
-# Configuração do Caddy para chat.agentesintegrados.com
+# Configuração do Caddy para suthub.agentesintegrados.com
 
-chat.agentesintegrados.com {
+suthub.agentesintegrados.com {
     # Configuração para o Frontend (Next.js)
     handle /* {
-        reverse_proxy localhost:3020 {
+        reverse_proxy localhost:3040 {
             # Headers para Next.js
             header_up Host {http.request.host}
             header_up X-Real-IP {http.request.remote}
@@ -14,7 +14,7 @@ chat.agentesintegrados.com {
     
     # Configuração para a API
     handle /api/* {
-        reverse_proxy localhost:8002 {
+        reverse_proxy localhost:8990 {
             # Headers para API
             header_up Host {http.request.host}
             header_up X-Real-IP {http.request.remote}
@@ -32,16 +32,14 @@ chat.agentesintegrados.com {
     
     # WebSocket support para hot-reload do Next.js (desenvolvimento)
     handle /_next/webpack-hmr {
-        reverse_proxy localhost:3020 {
+        reverse_proxy localhost:3040 {
             header_up Upgrade {http.request.header.Upgrade}
             header_up Connection {http.request.header.Connection}
         }
     }
     
     # HTTPS automático com Let's Encrypt
-    tls {
-        # Caddy gerencia certificados automaticamente
-    }
+    # Caddy gerencia certificados automaticamente
     
     # Headers de segurança
     header {
@@ -53,7 +51,7 @@ chat.agentesintegrados.com {
     
     # Logs
     log {
-        output file /var/log/caddy/chat.agentesintegrados.com.log {
+        output file /var/log/caddy/suthub.agentesintegrados.com.log {
             roll_size 10mb
             roll_keep 10
         }

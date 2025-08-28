@@ -31,8 +31,8 @@ COPY --from=builder /app/.next/static ./.next/static
 
 USER nextjs
 
-EXPOSE 3020
+EXPOSE 3040
 
-ENV PORT 3020
+ENV PORT 3040
 
 CMD ["node", "server.js"]

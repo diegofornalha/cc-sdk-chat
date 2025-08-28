@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: cc-sdk-api
     ports:
-      - "${API_PORT:-8002}:8002"
+      - "${API_PORT:-8989}:8989"
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -20,7 +20,7 @@ services:
       - claude-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8989/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -32,9 +32,9 @@ services:
       dockerfile: Dockerfile
     container_name: cc-sdk-frontend
     ports:
-      - "${FRONTEND_PORT:-3020}:3020"
+      - "${FRONTEND_PORT:-3040}:3040"
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8002
+      - NEXT_PUBLIC_API_URL=http://api:8989
       - NODE_ENV=production
     depends_on:
       api:

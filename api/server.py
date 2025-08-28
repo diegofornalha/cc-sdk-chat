@@ -52,7 +52,7 @@ app = FastAPI(
     },
     servers=[
         {
-            "url": "http://localhost:8002",
+            "url": "http://localhost:8989",
             "description": "Servidor de desenvolvimento"
         }
     ],
@@ -76,10 +76,11 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3020", 
+        "http://localhost:3040", 
         "http://localhost:3000",
-        "https://chat.agentesintegrados.com",
-        "http://chat.agentesintegrados.com"
+        "http://127.0.0.1:3040",
+        "https://suthub.agentesintegrados.com",
+        "http://suthub.agentesintegrados.com"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -531,4 +532,4 @@ async def list_sessions() -> List[SessionInfoResponse]:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=8990, reload=False)

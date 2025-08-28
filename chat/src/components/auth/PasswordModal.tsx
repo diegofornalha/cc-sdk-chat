@@ -23,7 +23,7 @@ export function PasswordModal({ onSuccess }: PasswordModalProps) {
   const [error, setError] = React.useState('')
 
   // Senha padrão para desenvolvimento
-  const CORRECT_PASSWORD = 'claude123'
+  const CORRECT_PASSWORD = 'suthub'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

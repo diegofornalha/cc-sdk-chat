@@ -7,7 +7,7 @@ import json
 
 async def test_api():
     """Testa a API."""
-    base_url = "http://localhost:8002"
+    base_url = "http://localhost:8989"
     
     async with aiohttp.ClientSession() as session:
         # Criar nova sessão

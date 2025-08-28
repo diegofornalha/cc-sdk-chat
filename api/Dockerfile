@@ -23,11 +23,11 @@ COPY claude-code-sdk-python /app/claude-code-sdk-python
 COPY . .
 
 # Expõe porta
-EXPOSE 8002
+EXPOSE 8989
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8002/ || exit 1
+    CMD curl -f http://localhost:8989/ || exit 1
 
 # Comando para iniciar a aplicação
 CMD ["python3", "-u", "server.py"]

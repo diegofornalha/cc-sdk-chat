@@ -38,16 +38,16 @@ class ChatAPI {
         } else if (typeof window !== 'undefined') {
             // No browser, usa a mesma origem ou localhost para desenvolvimento
             const host = window.location.hostname;
-            if (host === 'chat.agentesintegrados.com') {
+            if (host === 'suthub.agentesintegrados.com') {
                 // Em produção, usa a mesma origem (Caddy fará o proxy)
                 this.baseUrl = '';
             } else {
                 // Em desenvolvimento, usa localhost
-                this.baseUrl = 'http://localhost:8002';
+                this.baseUrl = 'http://localhost:8989';
             }
         } else {
             // SSR ou ambiente Node.js
-            this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8002';
+            this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8989';
         }
     }
 

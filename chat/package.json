@@ -4,9 +4,9 @@
   "description": "Task: Make a streaming Markdown parser.",
   "main": "index.js",
   "scripts": {
-    "dev": "next dev -p 3020",
+    "dev": "next dev -p 3040",
     "build": "next build",
-    "start": "next start -p 3020",
+    "start": "next start -p 3040",
     "lint": "next lint"
   },
   "repository": {

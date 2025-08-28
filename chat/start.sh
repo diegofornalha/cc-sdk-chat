@@ -12,8 +12,8 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
-echo "✅ Iniciando servidor de desenvolvimento na porta 3020..."
-echo "🌐 Acesse: http://localhost:3020"
+echo "✅ Iniciando servidor de desenvolvimento na porta 3040..."
+echo "🌐 Acesse: http://localhost:3040"
 echo "====================================="
 
 # Inicia o servidor

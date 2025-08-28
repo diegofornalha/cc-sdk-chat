@@ -10,8 +10,8 @@ pkill -f "next-server" 2>/dev/null
 sleep 2
 
 # Inicia API
-echo "Iniciando API na porta 8002..."
-cd /home/codable/Claudable/cc-sdk-chat/api
+echo "Iniciando API na porta 8989..."
+cd /home/suthub/.claude/cc-sdk-chat/api
 python3 server.py &
 API_PID=$!
 echo "API iniciada com PID: $API_PID"
@@ -20,16 +20,16 @@ echo "API iniciada com PID: $API_PID"
 sleep 3
 
 # Inicia Frontend
-echo "Iniciando Frontend na porta 3020..."
-cd /home/codable/Claudable/cc-sdk-chat/chat
+echo "Iniciando Frontend na porta 3040..."
+cd /home/suthub/.claude/cc-sdk-chat/chat
 npm run dev &
 FRONTEND_PID=$!
 echo "Frontend iniciado com PID: $FRONTEND_PID"
 
 echo ""
 echo "Servidores iniciados!"
-echo "API: http://localhost:8002"
-echo "Frontend: http://localhost:3020"
+echo "API: http://localhost:8989"
+echo "Frontend: http://localhost:3040"
 echo ""
 echo "Para parar os servidores, use: pkill -f server.py && pkill -f next-server"
 
