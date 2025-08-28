@@ -1,21 +1,18 @@
 'use client';
 
-import React from 'react';
-import { ChatInterface } from '../components/ChatInterface';
+import React, { useState } from 'react';
+import { ChatInterface } from '@/components/chat/ChatInterface';
+import { PasswordModal } from '@/components/auth/PasswordModal';
 
-export default function Home(): JSX.Element {
-    return (
-        <main className="main-container">
-            <ChatInterface />
-            <style jsx>{`
-                .main-container {
-                    width: 100%;
-                    height: 100vh;
-                    margin: 0;
-                    padding: 0;
-                    overflow: hidden;
-                }
-            `}</style>
-        </main>
-    );
+export default function Home() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  return (
+    <>
+      {!isAuthenticated && (
+        <PasswordModal onSuccess={() => setIsAuthenticated(true)} />
+      )}
+      <ChatInterface />
+    </>
+  );
 }

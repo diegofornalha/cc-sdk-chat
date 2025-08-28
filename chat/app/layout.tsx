@@ -1,10 +1,10 @@
 import React from 'react';
-import '../globals.css';
+import '@/styles/globals.css';
 import { Providers } from '../providers';
 
 export const metadata = {
-  title: 'Markdown Parser',
-  description: 'Um parser de markdown com streaming',
+  title: 'Claude Chat - Interface Avançada',
+  description: 'Chat profissional com Claude usando SDK Python',
 };
 
 export default function RootLayout({
