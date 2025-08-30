@@ -43,24 +43,14 @@ class ChatAPI {
         this.baseUrl = '';
       } else {
         // Em desenvolvimento, usa localhost
-        this.baseUrl = 'http://localhost:8991';
+        this.baseUrl = 'http://localhost:8992';
       }
     } else {
       // SSR ou ambiente Node.js
-      this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8991';
+      this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8992';
     }
   }
 
-  async getCurrentClaudeSessionId(): Promise<string | null> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/current-session-id`)
-      const data = await response.json()
-      return data.session_id || null
-    } catch (error) {
-      console.error('Erro ao obter ID da sessão Claude:', error)
-      return null
-    }
-  }
 
   async createSession(): Promise<string> {
     const response = await fetch(`${this.baseUrl}/api/new-session`, {
@@ -75,17 +65,8 @@ class ChatAPI {
     }
 
     const data = await response.json();
-    
-    // Usa claude_session_id se disponível, senão usa session_id
-    const sessionId = data.claude_session_id || data.session_id;
-    this.sessionId = sessionId;
-    
-    // Salva ID do Claude Code no localStorage para sincronização
-    if (data.claude_session_id && typeof window !== 'undefined') {
-      localStorage.setItem('claude_session_id', data.claude_session_id);
-    }
-    
-    return sessionId;
+    this.sessionId = data.session_id;
+    return data.session_id;
   }
 
   async createSessionWithConfig(config: any): Promise<string> {

@@ -7,7 +7,7 @@ import { cn, formatTokens, formatCost } from '@/lib/utils'
 
 interface ChatMessageProps {
   role: 'user' | 'assistant' | 'system'
-  content: string
+  content: string | { type: string; text?: string; thinking?: string } | Array<any>
   timestamp?: Date
   tokens?: { input?: number; output?: number }
   cost?: number
@@ -31,8 +31,29 @@ export function ChatMessage({
   const [copied, setCopied] = React.useState(false)
   const messageRef = React.useRef<HTMLDivElement>(null)
 
+  const processMessageContent = (content: any): string => {
+    if (typeof content === 'string') {
+      return content;
+    }
+    
+    if (Array.isArray(content)) {
+      return content.map((item) => {
+        if (item.type === 'text') return item.text;
+        if (item.type === 'thinking') return `💭 ${item.thinking}`;
+        return JSON.stringify(item);
+      }).join('\n\n');
+    }
+    
+    if (content.type === 'text') return content.text;
+    if (content.type === 'thinking') return `💭 ${content.thinking}`;
+    
+    return JSON.stringify(content, null, 2);
+  };
+
+  const processedContent = processMessageContent(content);
+
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(content)
+    await navigator.clipboard.writeText(processedContent)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
@@ -60,11 +81,11 @@ export function ChatMessage({
 
   const renderContent = () => {
     if (role === 'user') {
-      return <p className="whitespace-pre-wrap">{content}</p>
+      return <p className="whitespace-pre-wrap">{processedContent}</p>
     }
 
     // Para assistente, renderizar markdown
-    const html = marked(content, { 
+    const html = marked(processedContent, { 
       breaks: true,
       gfm: true,
       headerIds: false

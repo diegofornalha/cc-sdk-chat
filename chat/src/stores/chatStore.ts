@@ -82,11 +82,7 @@ const useChatStore = create<ChatStore>()(
     streamingContent: '',
     
     createSession: (config = {}) => {
-      // Tenta usar ID do Claude Code salvo no localStorage, senão gera interno
-      const claudeSessionId = typeof window !== 'undefined' ? 
-        localStorage.getItem('claude_session_id') : null;
-      
-      const sessionId = claudeSessionId || `session-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(7)}`
       const newSession: Session = {
         id: sessionId,
         title: `Nova Conversa ${new Date().toLocaleDateString('pt-BR')}`,

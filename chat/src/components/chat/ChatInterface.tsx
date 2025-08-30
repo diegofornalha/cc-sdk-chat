@@ -46,7 +46,6 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
 
   const [showConfigModal, setShowConfigModal] = React.useState(false)
   const [api] = React.useState(() => new ChatAPI())
-  const [claudeSessionId, setClaudeSessionId] = React.useState<string | null>(null)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
   const activeSession = getActiveSession()
@@ -57,80 +56,32 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeSession?.messages, streamingContent])
 
-  // Buscar ID real da sessão Claude Code (dinâmico)
-  React.useEffect(() => {
-    const fetchClaudeSessionId = async () => {
-      // Se já temos sessionData, usa o ID dele
-      if (sessionData && sessionData.id) {
-        setClaudeSessionId(sessionData.id)
-        localStorage.setItem('claude_session_id', sessionData.id)
-        return
-      }
-      
-      // Senão, busca ID atual do Claude Code
-      const realSessionId = await api.getCurrentClaudeSessionId()
-      setClaudeSessionId(realSessionId)
-      
-      // Salva no localStorage para uso posterior
-      if (realSessionId && typeof window !== 'undefined') {
-        localStorage.setItem('claude_session_id', realSessionId)
-      }
-    }
-    fetchClaudeSessionId()
-    
-    // Atualiza a cada 30 segundos para pegar mudanças (só se não tiver sessionData)
-    let interval: NodeJS.Timeout | null = null
-    if (!sessionData) {
-      interval = setInterval(fetchClaudeSessionId, 30000)
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [api, sessionData])
 
   // Carregar histórico da sessão se fornecido via props
   React.useEffect(() => {
+    console.log('🔍 ChatInterface recebeu sessionData:', sessionData);
     if (sessionData && sessionData.messages) {
+      console.log('📥 Carregando', sessionData.messages.length, 'mensagens');
       // Usa função do store para carregar sessão externa (resolve problema Immer)
       loadExternalSession(sessionData)
-      toast.success(`Histórico carregado: ${sessionData.messages.length} mensagens`)
+      toast.success(`📋 Histórico carregado: ${sessionData.messages.length} mensagens`)
     }
   }, [sessionData, loadExternalSession])
 
   // Inicializar com uma sessão se não houver nenhuma
   React.useEffect(() => {
     if (sessions.size === 0 && !sessionData) {
+      console.log('🆕 Criando nova sessão (sem sessionData)');
       createSession()
+    } else if (sessionData) {
+      console.log('📂 sessionData presente, aguardando carregamento...');
     }
   }, [sessionData])
 
-  const handleNewSession = async (config?: SessionConfig) => {
-    try {
-      // Busca ID real da sessão Claude Code
-      const realSessionId = await api.getCurrentClaudeSessionId()
-      
-      if (realSessionId) {
-        // Cria sessão com ID real
-        const sessionId = createSession(config)
-        setActiveSession(sessionId)
-        
-        // Redireciona para URL específica da sessão
-        const projectName = '-home-suthub--claude-api-claude-code-app-cc-sdk-chat-api'
-        const sessionUrl = `/claude/${projectName}/${realSessionId}`
-        
-        toast.success(`Nova sessão criada: ${realSessionId.slice(-8)}`)
-        router.push(sessionUrl)
-      } else {
-        // Fallback sem redirecionamento
-        const sessionId = createSession(config)
-        setActiveSession(sessionId)
-        toast.success('Nova sessão criada')
-      }
-    } catch (error) {
-      console.error('Erro ao criar sessão:', error)
-      toast.error('Erro ao criar nova sessão')
-    }
+  const handleNewSession = (config?: SessionConfig) => {
+    const sessionId = createSession(config)
+    setActiveSession(sessionId)
+    toast.success('Nova sessão criada')
   }
 
   const handleSendMessage = async (content: string) => {
@@ -148,7 +99,6 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     setStreamingContent('')
 
     try {
-      let assistantMessageId: string | null = null
       let currentContent = ''
       let tools: string[] = []
 
@@ -299,7 +249,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
           onSessionSelect={setActiveSession}
           onSessionClose={deleteSession}
           onNewSession={() => setShowConfigModal(true)}
-          onAnalytics={() => toast.info('Analytics das sessões em desenvolvimento')}
+          onAnalytics={() => toast.info('Analytics em desenvolvimento')}
         />
       </header>
 
@@ -330,7 +280,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
                   cost={message.cost}
                   tools={message.tools}
                   sessionTitle={activeSession.title}
-                  sessionId={claudeSessionId || activeSession.id}
+                  sessionId={activeSession.id}
                 />
               ))}
               
@@ -340,7 +290,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
                   content={streamingContent}
                   isStreaming
                   sessionTitle={activeSession?.title}
-                  sessionId={claudeSessionId || activeSession?.id}
+                  sessionId={activeSession?.id}
                 />
               )}
               
@@ -407,6 +357,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
           setShowConfigModal(false)
         }}
       />
+
     </div>
   )
 }

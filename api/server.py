@@ -11,6 +11,8 @@ import json
 import uuid
 
 from claude_handler import ClaudeHandler, SessionConfig
+from analytics_service import AnalyticsService
+from session_manager import ClaudeCodeSessionManager
 
 app = FastAPI(
     title="Claude Chat API",
@@ -87,8 +89,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Handler global
+# Handlers globais
 claude_handler = ClaudeHandler()
+analytics_service = AnalyticsService()
+session_manager = ClaudeCodeSessionManager()
 
 class ChatMessage(BaseModel):
     """Modelo para mensagem de chat."""
@@ -337,34 +341,10 @@ async def clear_session(action: SessionAction) -> StatusResponse:
     }
 )
 async def create_new_session():
-    """Cria uma nova sessão sincronizada com Claude Code SDK."""
-    import asyncio
-    import time
-    
-    # Obter ID da sessão Claude Code ativa atual
-    current_claude_session = await get_current_claude_session_id()
-    claude_session_id = current_claude_session.get("session_id")
-    
-    if claude_session_id:
-        # Usa sessão Claude Code existente
-        session_id = claude_session_id
-        await claude_handler.create_session(session_id)
-        
-        return {
-            "session_id": session_id,
-            "claude_session_id": claude_session_id,
-            "source": "existing_claude_session"
-        }
-    else:
-        # Fallback: cria sessão interna
-        session_id = str(uuid.uuid4())
-        await claude_handler.create_session(session_id)
-        
-        return {
-            "session_id": session_id,
-            "claude_session_id": None,
-            "source": "internal_session"
-        }
+    """Cria uma nova sessão simples."""
+    session_id = str(uuid.uuid4())
+    await claude_handler.create_session(session_id)
+    return {"session_id": session_id}
 
 @app.delete(
     "/api/session/{session_id}",
@@ -563,7 +543,7 @@ async def list_sessions() -> List[SessionInfoResponse]:
     response_description="ID da sessão atual"
 )
 async def get_current_claude_session_id():
-    """Obtém ID real da sessão Claude Code ativa."""
+    """Obtém ID real da sessão Claude Code ativa do projeto cc-sdk-chat."""
     import json
     import glob
     from pathlib import Path
@@ -573,12 +553,23 @@ async def get_current_claude_session_id():
     if not claude_projects.exists():
         return {"session_id": None, "error": "Diretório ~/.claude/projects/ não encontrado"}
     
-    # Busca arquivos .jsonl mais recentes
-    jsonl_files = []
+    # Busca especificamente no projeto cc-sdk-chat-api
+    target_project = None
     for project_dir in claude_projects.iterdir():
-        if project_dir.is_dir():
-            for jsonl_file in project_dir.glob("*.jsonl"):
-                jsonl_files.append(jsonl_file)
+        if project_dir.is_dir() and "cc-sdk-chat-api" in project_dir.name:
+            target_project = project_dir
+            break
+    
+    if not target_project:
+        # Fallback: busca em todos os projetos
+        jsonl_files = []
+        for project_dir in claude_projects.iterdir():
+            if project_dir.is_dir():
+                for jsonl_file in project_dir.glob("*.jsonl"):
+                    jsonl_files.append(jsonl_file)
+    else:
+        # Busca apenas no projeto correto
+        jsonl_files = list(target_project.glob("*.jsonl"))
     
     if not jsonl_files:
         return {"session_id": None, "error": "Nenhum arquivo .jsonl encontrado"}
@@ -695,6 +686,95 @@ async def get_session_history(session_id: str):
         "file": str(target_file)
     }
 
+@app.get(
+    "/api/analytics/global",
+    tags=["Analytics"],
+    summary="Analytics Globais das Sessões",
+    description="""Retorna métricas completas de todas as sessões Claude Code.
+    
+    Analisa todos os arquivos .jsonl para fornecer:
+    - Total de tokens, custo, mensagens
+    - Métricas por projeto  
+    - Ferramentas mais usadas
+    - Rankings de sessões
+    """,
+    response_description="Analytics completos"
+)
+async def get_global_analytics():
+    """Obtém analytics globais de todas as sessões."""
+    try:
+        analytics = await analytics_service.get_global_analytics()
+        
+        return {
+            "summary": {
+                "total_sessions": analytics.total_sessions,
+                "total_messages": analytics.total_messages,
+                "total_tokens": analytics.total_tokens,
+                "total_cost": analytics.total_cost,
+                "active_projects": len(analytics.active_projects)
+            },
+            "by_project": {
+                "sessions": analytics.sessions_by_project,
+                "costs": analytics.cost_by_project,
+                "tokens": analytics.tokens_by_project
+            },
+            "top_tools": analytics.most_used_tools,
+            "top_sessions": [
+                {
+                    "id": s.session_id,
+                    "project": s.project,
+                    "messages": s.total_messages,
+                    "tokens": s.total_input_tokens + s.total_output_tokens,
+                    "cost": s.total_cost,
+                    "duration_hours": s.duration_hours,
+                    "tools": s.tools_used
+                }
+                for s in sorted(analytics.sessions_metrics, key=lambda x: x.total_messages, reverse=True)[:10]
+            ]
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get(
+    "/api/analytics/session/{session_id}",
+    tags=["Analytics"],
+    summary="Analytics de Sessão Específica",
+    description="""Retorna métricas detalhadas de uma sessão específica.""",
+    response_description="Analytics da sessão"
+)
+async def get_session_analytics(session_id: str):
+    """Obtém analytics de uma sessão específica."""
+    try:
+        metrics = await analytics_service.get_session_analytics(session_id)
+        
+        if not metrics:
+            return {"error": "Sessão não encontrada"}
+        
+        return {
+            "session_id": metrics.session_id,
+            "project": metrics.project,
+            "messages": {
+                "total": metrics.total_messages,
+                "user": metrics.user_messages,
+                "assistant": metrics.assistant_messages
+            },
+            "tokens": {
+                "input": metrics.total_input_tokens,
+                "output": metrics.total_output_tokens,
+                "total": metrics.total_input_tokens + metrics.total_output_tokens
+            },
+            "cost": metrics.total_cost,
+            "tools_used": metrics.tools_used,
+            "timing": {
+                "first_message": metrics.first_message_time.isoformat() if metrics.first_message_time else None,
+                "last_message": metrics.last_message_time.isoformat() if metrics.last_message_time else None,
+                "duration_hours": metrics.duration_hours
+            },
+            "file_path": metrics.file_path
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8991, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=8992, reload=False)
