@@ -10,7 +10,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 
 # Adiciona o diretório do SDK ao path
-sdk_dir = '/home/codable/Claudable/cc-sdk-chat/api/claude-code-sdk-python'
+sdk_dir = '/home/suthub/.claude/api-claude-code-app/claude-code-sdk-python'
 sys.path.insert(0, sdk_dir)
 
 from src import (
