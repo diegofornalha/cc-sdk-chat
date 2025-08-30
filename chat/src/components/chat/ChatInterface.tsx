@@ -9,7 +9,6 @@ import {
   Settings, 
   Download, 
   Upload,
-  BarChart3,
   RefreshCw,
   Trash2,
   Bot
@@ -40,6 +39,7 @@ export function ChatInterface() {
 
   const [showConfigModal, setShowConfigModal] = React.useState(false)
   const [api] = React.useState(() => new ChatAPI())
+  const [claudeSessionId, setClaudeSessionId] = React.useState<string | null>(null)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
 
   const activeSession = getActiveSession()
@@ -49,6 +49,24 @@ export function ChatInterface() {
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeSession?.messages, streamingContent])
+
+  // Buscar ID real da sessão Claude Code
+  React.useEffect(() => {
+    const fetchClaudeSessionId = async () => {
+      const realSessionId = await api.getCurrentClaudeSessionId()
+      setClaudeSessionId(realSessionId)
+      
+      // Salva no localStorage para uso posterior
+      if (realSessionId && typeof window !== 'undefined') {
+        localStorage.setItem('claude_session_id', realSessionId)
+      }
+    }
+    fetchClaudeSessionId()
+    
+    // Atualiza a cada 30 segundos para pegar mudanças
+    const interval = setInterval(fetchClaudeSessionId, 30000)
+    return () => clearInterval(interval)
+  }, [api])
 
   // Inicializar com uma sessão se não houver nenhuma
   React.useEffect(() => {
@@ -195,15 +213,6 @@ export function ChatInterface() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => toast.info('Dashboard em desenvolvimento')}
-              title="Analytics"
-            >
-              <BarChart3 className="h-5 w-5" />
-            </Button>
-            
-            <Button
-              variant="ghost"
-              size="icon"
               onClick={handleExportSession}
               disabled={!activeSession}
               title="Exportar sessão"
@@ -238,6 +247,7 @@ export function ChatInterface() {
           onSessionSelect={setActiveSession}
           onSessionClose={deleteSession}
           onNewSession={() => setShowConfigModal(true)}
+          onAnalytics={() => toast.info('Analytics das sessões em desenvolvimento')}
         />
       </header>
 
@@ -267,6 +277,8 @@ export function ChatInterface() {
                   tokens={message.tokens}
                   cost={message.cost}
                   tools={message.tools}
+                  sessionTitle={activeSession.title}
+                  sessionId={claudeSessionId || activeSession.id}
                 />
               ))}
               
@@ -275,6 +287,8 @@ export function ChatInterface() {
                   role="assistant"
                   content={streamingContent}
                   isStreaming
+                  sessionTitle={activeSession?.title}
+                  sessionId={claudeSessionId || activeSession?.id}
                 />
               )}
               

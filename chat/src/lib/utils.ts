@@ -28,3 +28,17 @@ export function formatDate(date: Date | string): string {
 export function generateSessionId(): string {
   return `session-${Date.now()}-${Math.random().toString(36).substring(7)}`
 }
+
+export function getCurrentClaudeSessionId(): string | null {
+  // Busca ID real da sessão atual no ~/.claude/projects/
+  // Formato: 70fcbdbd-4e34-4770-be69-d85c76ba7c8b
+  
+  // Para ambiente web, podemos tentar extrair do localStorage
+  // ou fazer requisição para backend que lê os arquivos .jsonl
+  if (typeof window !== 'undefined') {
+    const storedSessionId = localStorage.getItem('claude_session_id')
+    return storedSessionId
+  }
+  
+  return null
+}

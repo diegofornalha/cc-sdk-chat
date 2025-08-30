@@ -13,6 +13,8 @@ interface ChatMessageProps {
   cost?: number
   tools?: string[]
   isStreaming?: boolean
+  sessionTitle?: string
+  sessionId?: string
 }
 
 export function ChatMessage({ 
@@ -22,7 +24,9 @@ export function ChatMessage({
   tokens, 
   cost, 
   tools,
-  isStreaming = false 
+  isStreaming = false,
+  sessionTitle,
+  sessionId
 }: ChatMessageProps) {
   const [copied, setCopied] = React.useState(false)
   const messageRef = React.useRef<HTMLDivElement>(null)
@@ -106,7 +110,7 @@ export function ChatMessage({
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
-                  {role === 'user' ? 'Você' : 'Claude'}
+                  {role === 'user' ? 'Você' : `Claude${sessionTitle ? ` • ${sessionTitle}` : sessionId ? ` • ${sessionId.slice(-8)}` : ''}`}
                 </span>
                 {timestamp && (
                   <span className="text-xs text-muted-foreground">
@@ -153,13 +157,16 @@ export function ChatMessage({
             </div>
 
             {/* Footer with metrics */}
-            {(tokens || cost) && !isStreaming && (
+            {(tokens || cost || sessionId) && !isStreaming && (
               <div className="mt-3 flex items-center gap-4 border-t pt-2 text-xs text-muted-foreground">
                 {tokens && (
                   <span>Tokens: {formatTokens(tokens.input, tokens.output)}</span>
                 )}
                 {cost && (
-                  <span>Custo: {formatCost(cost)}</span>
+                  <span>Custo: USD {cost.toFixed(6)}</span>
+                )}
+                {sessionId && !sessionId.startsWith('session-') && (
+                  <span>Sessão: {sessionId}</span>
                 )}
               </div>
             )}

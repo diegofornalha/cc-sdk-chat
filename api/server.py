@@ -320,10 +320,9 @@ async def clear_session(action: SessionAction) -> StatusResponse:
     "/api/new-session",
     tags=["Sessões"],
     summary="Criar Nova Sessão",
-    description="""Cria uma nova sessão de chat com ID único.
+    description="""Cria uma nova sessão de chat sincronizada com Claude Code SDK.
     
-    Cada sessão mantém seu próprio contexto e histórico de conversas.
-    Use o session_id retornado nas próximas chamadas para manter o contexto.
+    Retorna o ID real da sessão Claude Code ativa para sincronização completa.
     """,
     response_description="ID da nova sessão criada",
     responses={
@@ -331,18 +330,41 @@ async def clear_session(action: SessionAction) -> StatusResponse:
             "description": "Sessão criada com sucesso",
             "content": {
                 "application/json": {
-                    "example": {"session_id": "550e8400-e29b-41d4-a716-446655440000"}
+                    "example": {"session_id": "70fcbdbd-4e34-4770-be69-d85c76ba7c8b", "claude_session_id": "70fcbdbd-4e34-4770-be69-d85c76ba7c8b"}
                 }
             }
         }
-    },
-    response_model=SessionResponse
+    }
 )
-async def create_new_session() -> SessionResponse:
-    """Cria uma nova sessão com ID único."""
-    session_id = str(uuid.uuid4())
-    await claude_handler.create_session(session_id)
-    return SessionResponse(session_id=session_id)
+async def create_new_session():
+    """Cria uma nova sessão sincronizada com Claude Code SDK."""
+    import asyncio
+    import time
+    
+    # Obter ID da sessão Claude Code ativa atual
+    current_claude_session = await get_current_claude_session_id()
+    claude_session_id = current_claude_session.get("session_id")
+    
+    if claude_session_id:
+        # Usa sessão Claude Code existente
+        session_id = claude_session_id
+        await claude_handler.create_session(session_id)
+        
+        return {
+            "session_id": session_id,
+            "claude_session_id": claude_session_id,
+            "source": "existing_claude_session"
+        }
+    else:
+        # Fallback: cria sessão interna
+        session_id = str(uuid.uuid4())
+        await claude_handler.create_session(session_id)
+        
+        return {
+            "session_id": session_id,
+            "claude_session_id": None,
+            "source": "internal_session"
+        }
 
 @app.delete(
     "/api/session/{session_id}",
@@ -530,6 +552,149 @@ async def list_sessions() -> List[SessionInfoResponse]:
     sessions = await claude_handler.get_all_sessions()
     return [SessionInfoResponse(**session) for session in sessions]
 
+@app.get(
+    "/api/current-session-id",
+    tags=["Sessões"],
+    summary="Obter ID da Sessão Claude Code Atual",
+    description="""Retorna o ID da sessão Claude Code ativa atual extraído dos arquivos .jsonl.
+    
+    Busca em ~/.claude/projects/ pelo arquivo .jsonl mais recente.
+    """,
+    response_description="ID da sessão atual"
+)
+async def get_current_claude_session_id():
+    """Obtém ID real da sessão Claude Code ativa."""
+    import json
+    import glob
+    from pathlib import Path
+    
+    claude_projects = Path.home() / ".claude" / "projects"
+    
+    if not claude_projects.exists():
+        return {"session_id": None, "error": "Diretório ~/.claude/projects/ não encontrado"}
+    
+    # Busca arquivos .jsonl mais recentes
+    jsonl_files = []
+    for project_dir in claude_projects.iterdir():
+        if project_dir.is_dir():
+            for jsonl_file in project_dir.glob("*.jsonl"):
+                jsonl_files.append(jsonl_file)
+    
+    if not jsonl_files:
+        return {"session_id": None, "error": "Nenhum arquivo .jsonl encontrado"}
+    
+    # Ordena por modificação mais recente
+    jsonl_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+    latest_file = jsonl_files[0]
+    
+    try:
+        # Lê primeira linha para pegar sessionId
+        with open(latest_file, 'r', encoding='utf-8') as f:
+            first_line = f.readline().strip()
+            if first_line:
+                data = json.loads(first_line)
+                session_id = data.get('sessionId')
+                return {
+                    "session_id": session_id,
+                    "file": str(latest_file),
+                    "project": latest_file.parent.name
+                }
+    except Exception as e:
+        return {"session_id": None, "error": str(e)}
+    
+    return {"session_id": None, "error": "Não foi possível extrair sessionId"}
+
+@app.get(
+    "/api/session-history/{session_id}",
+    tags=["Sessões"],
+    summary="Obter Histórico Real da Sessão Claude",
+    description="""Carrega histórico completo de uma sessão do arquivo .jsonl.
+    
+    Preserva todo o histórico mesmo se a pessoa sair e entrar novamente.
+    """,
+    response_description="Histórico da sessão"
+)
+async def get_session_history(session_id: str):
+    """Obtém histórico real de uma sessão do arquivo .jsonl."""
+    import json
+    from pathlib import Path
+    
+    claude_projects = Path.home() / ".claude" / "projects"
+    
+    if not claude_projects.exists():
+        return {"messages": [], "error": "Diretório ~/.claude/projects/ não encontrado"}
+    
+    # Busca arquivo com este session_id
+    target_file = None
+    for project_dir in claude_projects.iterdir():
+        if project_dir.is_dir():
+            for jsonl_file in project_dir.glob("*.jsonl"):
+                if jsonl_file.stem == session_id:
+                    target_file = jsonl_file
+                    break
+            if target_file:
+                break
+    
+    if not target_file:
+        return {"messages": [], "error": f"Arquivo de sessão {session_id} não encontrado"}
+    
+    messages = []
+    try:
+        with open(target_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        data = json.loads(line)
+                        
+                        # Extrai mensagem se existir
+                        if 'message' in data and 'role' in data['message']:
+                            msg = data['message']
+                            
+                            # Converte para formato do chat
+                            chat_message = {
+                                "id": data.get('uuid', ''),
+                                "role": msg['role'],
+                                "content": msg.get('content', ''),
+                                "timestamp": data.get('timestamp'),
+                                "tokens": None,
+                                "cost": None
+                            }
+                            
+                            # Extrai tokens e custo se disponível
+                            if 'usage' in msg:
+                                usage = msg['usage']
+                                chat_message["tokens"] = {
+                                    "input": usage.get('input_tokens', 0),
+                                    "output": usage.get('output_tokens', 0)
+                                }
+                            
+                            # Detecta ferramentas usadas
+                            tools_used = []
+                            if 'content' in msg and isinstance(msg['content'], list):
+                                for content_block in msg['content']:
+                                    if isinstance(content_block, dict) and content_block.get('type') == 'tool_use':
+                                        tool_name = content_block.get('name')
+                                        if tool_name:
+                                            tools_used.append(tool_name)
+                            
+                            if tools_used:
+                                chat_message["tools"] = tools_used
+                            
+                            messages.append(chat_message)
+                            
+                    except json.JSONDecodeError:
+                        continue
+                        
+    except Exception as e:
+        return {"messages": [], "error": str(e)}
+    
+    return {
+        "messages": messages,
+        "session_id": session_id,
+        "total_messages": len(messages),
+        "file": str(target_file)
+    }
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8990, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=8991, reload=False)

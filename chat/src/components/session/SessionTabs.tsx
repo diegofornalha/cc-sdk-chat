@@ -1,7 +1,7 @@
 import React from 'react'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 import { Button } from '../ui/button'
-import { Plus, X, MessageSquare } from 'lucide-react'
+import { Plus, X, MessageSquare, BarChart3 } from 'lucide-react'
 import { Session } from '@/stores/chatStore'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +11,7 @@ interface SessionTabsProps {
   onSessionSelect: (sessionId: string) => void
   onSessionClose: (sessionId: string) => void
   onNewSession: () => void
+  onAnalytics?: () => void
 }
 
 export function SessionTabs({
@@ -18,7 +19,8 @@ export function SessionTabs({
   activeSessionId,
   onSessionSelect,
   onSessionClose,
-  onNewSession
+  onNewSession,
+  onAnalytics
 }: SessionTabsProps) {
   return (
     <div className="flex items-center gap-2 border-b bg-muted/30 px-4 py-2">
@@ -59,6 +61,16 @@ export function SessionTabs({
         </div>
       </div>
 
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onAnalytics || (() => console.log('Analytics clicked'))}
+        className="shrink-0"
+        title="Analytics das Sessões"
+      >
+        <BarChart3 className="h-4 w-4" />
+      </Button>
+      
       <Button
         variant="outline"
         size="sm"
