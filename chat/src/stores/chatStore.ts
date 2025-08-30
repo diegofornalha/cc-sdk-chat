@@ -71,6 +71,7 @@ interface ChatStore {
   clearSession: (sessionId: string) => void
   exportSession: (sessionId: string) => Session | null
   importSession: (session: Session) => void
+  loadExternalSession: (sessionData: any) => void
 }
 
 const useChatStore = create<ChatStore>()(
@@ -245,6 +246,39 @@ const useChatStore = create<ChatStore>()(
     importSession: (session) => {
       set((state) => {
         state.sessions.set(session.id, session)
+      })
+    },
+    
+    loadExternalSession: (sessionData) => {
+      set((state) => {
+        const sessionId = sessionData.id
+        const newSession: Session = {
+          id: sessionId,
+          title: `Sessão ${sessionId.slice(-8)}`,
+          messages: sessionData.messages.map((msg: any) => ({
+            ...msg,
+            timestamp: new Date(msg.timestamp)
+          })),
+          config: {
+            systemPrompt: 'Sessão restaurada do Claude Code',
+            allowedTools: [],
+            maxTurns: 20,
+            permissionMode: 'acceptEdits',
+            cwd: undefined
+          },
+          metrics: {
+            totalTokens: sessionData.messages.reduce((total: number, msg: any) => 
+              total + (msg.tokens?.input || 0) + (msg.tokens?.output || 0), 0),
+            totalCost: sessionData.messages.reduce((total: number, msg: any) => 
+              total + (msg.cost || 0), 0),
+            messageCount: sessionData.messages.length
+          },
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+        
+        state.sessions.set(sessionId, newSession)
+        state.activeSessionId = sessionId
       })
     }
   }))

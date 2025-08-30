@@ -17,8 +17,14 @@ import useChatStore, { SessionConfig } from '@/stores/chatStore'
 import ChatAPI from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { Toaster, toast } from 'sonner'
+import { useRouter } from 'next/navigation'
 
-export function ChatInterface() {
+interface ChatInterfaceProps {
+  sessionData?: any;
+}
+
+export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
+  const router = useRouter();
   const {
     sessions,
     activeSessionId,
@@ -34,7 +40,8 @@ export function ChatInterface() {
     appendStreamingContent,
     updateMetrics,
     getActiveSession,
-    clearSession
+    clearSession,
+    loadExternalSession
   } = useChatStore()
 
   const [showConfigModal, setShowConfigModal] = React.useState(false)
@@ -50,9 +57,17 @@ export function ChatInterface() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeSession?.messages, streamingContent])
 
-  // Buscar ID real da sessão Claude Code
+  // Buscar ID real da sessão Claude Code (dinâmico)
   React.useEffect(() => {
     const fetchClaudeSessionId = async () => {
+      // Se já temos sessionData, usa o ID dele
+      if (sessionData && sessionData.id) {
+        setClaudeSessionId(sessionData.id)
+        localStorage.setItem('claude_session_id', sessionData.id)
+        return
+      }
+      
+      // Senão, busca ID atual do Claude Code
       const realSessionId = await api.getCurrentClaudeSessionId()
       setClaudeSessionId(realSessionId)
       
@@ -63,22 +78,59 @@ export function ChatInterface() {
     }
     fetchClaudeSessionId()
     
-    // Atualiza a cada 30 segundos para pegar mudanças
-    const interval = setInterval(fetchClaudeSessionId, 30000)
-    return () => clearInterval(interval)
-  }, [api])
+    // Atualiza a cada 30 segundos para pegar mudanças (só se não tiver sessionData)
+    let interval: NodeJS.Timeout | null = null
+    if (!sessionData) {
+      interval = setInterval(fetchClaudeSessionId, 30000)
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [api, sessionData])
+
+  // Carregar histórico da sessão se fornecido via props
+  React.useEffect(() => {
+    if (sessionData && sessionData.messages) {
+      // Usa função do store para carregar sessão externa (resolve problema Immer)
+      loadExternalSession(sessionData)
+      toast.success(`Histórico carregado: ${sessionData.messages.length} mensagens`)
+    }
+  }, [sessionData, loadExternalSession])
 
   // Inicializar com uma sessão se não houver nenhuma
   React.useEffect(() => {
-    if (sessions.size === 0) {
+    if (sessions.size === 0 && !sessionData) {
       createSession()
     }
-  }, [])
+  }, [sessionData])
 
-  const handleNewSession = (config?: SessionConfig) => {
-    const sessionId = createSession(config)
-    setActiveSession(sessionId)
-    toast.success('Nova sessão criada')
+  const handleNewSession = async (config?: SessionConfig) => {
+    try {
+      // Busca ID real da sessão Claude Code
+      const realSessionId = await api.getCurrentClaudeSessionId()
+      
+      if (realSessionId) {
+        // Cria sessão com ID real
+        const sessionId = createSession(config)
+        setActiveSession(sessionId)
+        
+        // Redireciona para URL específica da sessão
+        const projectName = '-home-suthub--claude-api-claude-code-app-cc-sdk-chat-api'
+        const sessionUrl = `/claude/${projectName}/${realSessionId}`
+        
+        toast.success(`Nova sessão criada: ${realSessionId.slice(-8)}`)
+        router.push(sessionUrl)
+      } else {
+        // Fallback sem redirecionamento
+        const sessionId = createSession(config)
+        setActiveSession(sessionId)
+        toast.success('Nova sessão criada')
+      }
+    } catch (error) {
+      console.error('Erro ao criar sessão:', error)
+      toast.error('Erro ao criar nova sessão')
+    }
   }
 
   const handleSendMessage = async (content: string) => {
