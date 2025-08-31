@@ -8,9 +8,18 @@ const nextConfig = {
     // Habilita recursos experimentais se necessário
   },
   
-  
   // Configurações de build
   output: 'standalone',
+  
+  // Configurações de build production  
+  typescript: {
+    // Manter verificação de tipos ativa (comentar se houver problemas)
+    ignoreBuildErrors: false,
+  },
+  eslint: {
+    // Manter linting ativo (comentar se houver problemas)
+    ignoreDuringBuilds: false,
+  },
   
   // Configurações de desenvolvimento
   devIndicators: {

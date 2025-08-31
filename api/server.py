@@ -892,4 +892,18 @@ async def load_project_history(request: dict):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8990, reload=False)
+    import os
+    
+    # Usa variáveis de ambiente para configuração flexível
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8989"))
+    log_level = os.getenv("LOG_LEVEL", "info").lower()
+    
+    uvicorn.run(
+        app, 
+        host=host, 
+        port=port, 
+        log_level=log_level,
+        reload=False,
+        access_log=True
+    )

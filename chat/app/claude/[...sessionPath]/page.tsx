@@ -15,7 +15,7 @@ export default function SessionPage() {
 
   useEffect(() => {
     const loadSessionFromURL = async () => {
-      if (!params.sessionPath) {
+      if (!params?.sessionPath) {
         setIsLoading(false);
         return;
       }
@@ -62,7 +62,7 @@ export default function SessionPage() {
     };
 
     loadSessionFromURL();
-  }, [params.sessionPath]);
+  }, [params?.sessionPath]);
 
   if (isLoading) {
     return (
