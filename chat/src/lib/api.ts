@@ -43,11 +43,11 @@ class ChatAPI {
         this.baseUrl = '';
       } else {
         // Em desenvolvimento, usa localhost
-        this.baseUrl = 'http://localhost:8992';
+        this.baseUrl = 'http://localhost:8990';
       }
     } else {
       // SSR ou ambiente Node.js
-      this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8992';
+      this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8990';
     }
   }
 

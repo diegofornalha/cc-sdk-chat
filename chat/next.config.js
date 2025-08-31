@@ -8,11 +8,6 @@ const nextConfig = {
     // Habilita recursos experimentais se necessário
   },
   
-  // Configurações de servidor
-  server: {
-    port: 3040,
-    hostname: '0.0.0.0'
-  },
   
   // Configurações de build
   output: 'standalone',

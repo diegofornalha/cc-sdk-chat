@@ -4,7 +4,7 @@ import { StreamingMarkdownRenderer } from '../StreamingMarkdownRenderer';
 interface StreamingMessageProps {
     content: string;
     isStreaming?: boolean;
-    role: 'user' | 'assistant';
+    role: 'user' | 'assistant' | 'system';
 }
 
 export const StreamingMessage: React.FC<StreamingMessageProps> = ({

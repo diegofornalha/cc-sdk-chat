@@ -777,4 +777,4 @@ async def get_session_analytics(session_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8992, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=8990, reload=False)

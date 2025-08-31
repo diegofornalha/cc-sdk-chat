@@ -12,7 +12,7 @@ export default function SessionViewerPage() {
   useEffect(() => {
     if (params.project && params.sessionId) {
       // Carregar sessão específica
-      fetch(`http://localhost:8992/api/session-history/${params.sessionId}`)
+      fetch(`http://localhost:8990/api/session-history/${params.sessionId}`)
         .then(res => res.json())
         .then(data => {
           if (!data.error && data.messages) {
