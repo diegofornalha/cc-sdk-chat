@@ -102,8 +102,6 @@ export function useStreamingChat() {
     });
     
     const apiRef = useRef<ChatAPI | null>(null);
-    const streamBuffer = useRef<string>('');
-    const bufferTimeout = useRef<NodeJS.Timeout | null>(null);
     
     // Inicializa API
     const initializeAPI = useCallback(async () => {
@@ -114,15 +112,8 @@ export function useStreamingChat() {
         }
     }, []);
     
-    // Processa buffer acumulado
-    const flushBuffer = useCallback(() => {
-        if (streamBuffer.current) {
-            dispatch({ type: 'APPEND_STREAM_CONTENT', content: streamBuffer.current });
-            streamBuffer.current = '';
-        }
-    }, []);
     
-    // Envia mensagem com buffering inteligente
+    // Envia mensagem com streaming otimizado - sem debounce
     const sendMessage = useCallback(async (message: string) => {
         if (!apiRef.current) return;
         // Removido bloqueio - permite enviar múltiplas mensagens mesmo durante streaming
@@ -137,7 +128,6 @@ export function useStreamingChat() {
         dispatch({ type: 'ADD_MESSAGE', message: userMessage });
         dispatch({ type: 'START_STREAMING' });
         
-        streamBuffer.current = '';
         let finalContent = '';
         let finalTokens: { input?: number; output?: number } | null = null;
         let finalCost: number | null = null;
@@ -146,26 +136,15 @@ export function useStreamingChat() {
             await apiRef.current.sendMessage(
                 message,
                 (data: StreamResponse) => {
-                    if (data.type === 'assistant_text') {
-                        // Acumula no buffer
-                        streamBuffer.current += data.content || '';
+                    if (data.type === 'text_chunk') {
+                        // Atualiza diretamente sem buffer ou timeout
+                        dispatch({ type: 'APPEND_STREAM_CONTENT', content: data.content || '' });
                         finalContent += data.content || '';
-                        
-                        // Limpa timeout anterior
-                        if (bufferTimeout.current) {
-                            clearTimeout(bufferTimeout.current);
-                        }
-                        
-                        // Agenda flush do buffer (debounce de 50ms)
-                        bufferTimeout.current = setTimeout(() => {
-                            flushBuffer();
-                        }, 50);
                         
                     } else if (data.type === 'tool_use') {
                         const toolMsg = `\n📦 Usando ferramenta: ${data.tool}\n`;
-                        streamBuffer.current += toolMsg;
+                        dispatch({ type: 'APPEND_STREAM_CONTENT', content: toolMsg });
                         finalContent += toolMsg;
-                        flushBuffer();
                         
                     } else if (data.type === 'result') {
                         if (data.input_tokens !== undefined) {
@@ -183,14 +162,10 @@ export function useStreamingChat() {
                 },
                 (error: string) => {
                     const errorMsg = `\n❌ Erro: ${error}`;
-                    streamBuffer.current += errorMsg;
+                    dispatch({ type: 'APPEND_STREAM_CONTENT', content: errorMsg });
                     finalContent += errorMsg;
-                    flushBuffer();
                 },
                 () => {
-                    // Flush final do buffer
-                    flushBuffer();
-                    
                     // Adiciona mensagem final
                     if (finalContent) {
                         const assistantMessage: ChatMessage = {
@@ -211,7 +186,7 @@ export function useStreamingChat() {
             console.error('Error sending message:', error);
             dispatch({ type: 'FINISH_STREAMING' });
         }
-    }, [flushBuffer]); // Removido state.isStreaming da dependência
+    }, []); // Removido flushBuffer das dependências
     
     // Limpa sessão
     const clearSession = useCallback(async () => {
@@ -233,7 +208,6 @@ export function useStreamingChat() {
             await apiRef.current.interruptSession();
             
             // Salva conteúdo parcial
-            flushBuffer();
             if (state.currentStreamContent) {
                 const partialMessage: ChatMessage = {
                     role: 'assistant',
@@ -247,7 +221,7 @@ export function useStreamingChat() {
         } catch (error) {
             console.error('Error interrupting session:', error);
         }
-    }, [state.isStreaming, state.currentStreamContent, flushBuffer]);
+    }, [state.isStreaming, state.currentStreamContent]);
     
     // Cleanup
     const cleanup = useCallback(async () => {

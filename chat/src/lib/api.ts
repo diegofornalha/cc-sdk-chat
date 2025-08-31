@@ -14,7 +14,7 @@ export interface ChatMessage {
 }
 
 export interface StreamResponse {
-  type: 'assistant_text' | 'tool_use' | 'tool_result' | 'result' | 'error' | 'done' | 'processing';
+  type: 'text_chunk' | 'assistant_text' | 'tool_use' | 'tool_result' | 'result' | 'error' | 'done' | 'processing';
   content?: string;
   tool?: string;
   id?: string;

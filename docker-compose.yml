@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # 🚀 API Backend com Claude Code SDK
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: cc-sdk-api
+    ports:
+      - "${API_PORT:-8990}:8990"
+    environment:
+      # Python
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Claude Code Bypass Permissions - Configuração Completa
+      - CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true
+      - CLAUDE_AUTO_APPROVE=true
+      - CLAUDE_TRUST_ALL_DIRECTORIES=true
+      - CLAUDE_AUTO_APPROVE_MCP=true
+      - CLAUDE_BYPASS_PERMISSIONS=true
+      - CLAUDE_NO_PROMPT=true
+      - CLAUDE_DISABLE_TELEMETRY=1
+      
+      # API Config
+      - PORT=8990
+      - MAX_SESSION_TIME=${MAX_SESSION_TIME:-3600}
+      - MAX_SESSIONS_PER_IP=${MAX_SESSIONS_PER_IP:-10}
+    volumes:
+      # Claude config - permite escrita para salvar autenticação
+      - ~/.claude:/home/appuser/.claude
+    networks:
+      - claude-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8990/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on: []
+
+  # 🌐 Frontend Next.js
+  frontend:
+    build:
+      context: ./chat
+      dockerfile: Dockerfile
+    container_name: cc-sdk-frontend
+    ports:
+      - "${FRONTEND_PORT:-3040}:3040"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - NEXT_PUBLIC_API_URL=http://api:8990
+      - PORT=3040
+    # volumes:
+      # Código fonte para desenvolvimento (comentar em produção)
+      # - ./chat:/app:ro
+      # - /app/node_modules
+      # - /app/.next
+    networks:
+      - claude-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3040/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      - api
+
+  # 📊 Nginx Reverse Proxy (Opcional)
+  nginx:
+    image: nginx:alpine
+    container_name: cc-sdk-proxy
+    ports:
+      - "${PROXY_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./logs/nginx:/var/log/nginx
+    networks:
+      - claude-network
+    restart: unless-stopped
+    depends_on:
+      - api
+      - frontend
+    profiles:
+      - proxy  # Para ativar: docker compose --profile proxy up
+
+networks:
+  claude-network:
+    driver: bridge
+    name: claude-network
+
+volumes:
+  # Volumes nomeados para persistência
+  api_sessions:
+    name: cc-sdk-api-sessions
+  api_logs:
+    name: cc-sdk-api-logs
+  nginx_logs:
+    name: cc-sdk-nginx-logs

@@ -192,6 +192,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
         content,
         (data) => {
           switch (data.type) {
+            case 'text_chunk':
             case 'assistant_text':
               currentContent += data.content || ''
               appendStreamingContent(data.content || '')
@@ -274,7 +275,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
               const finalSessionId = data.session_id || currentSessionId || activeSessionId
               
               // Adiciona mensagem completa do assistente
-              if (currentContent) {
+              if (currentContent && finalSessionId) {
                 addMessage(finalSessionId, {
                   role: 'assistant',
                   content: currentContent,
@@ -289,7 +290,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
               }
               
               // Atualiza métricas com sessionId correto
-              if (data.input_tokens || data.output_tokens || data.cost_usd) {
+              if ((data.input_tokens || data.output_tokens || data.cost_usd) && finalSessionId) {
                 updateMetrics(
                   finalSessionId,
                   { input: data.input_tokens, output: data.output_tokens },

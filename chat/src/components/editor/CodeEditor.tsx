@@ -35,7 +35,7 @@ export function CodeEditor({
   const [copied, setCopied] = React.useState(false)
   const editorRef = React.useRef<any>(null)
 
-  const handleEditorDidMount = (editor: any) => {
+  const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor
     
     // Add custom keybindings

@@ -71,7 +71,7 @@ ENV HOSTNAME "0.0.0.0"
 
 # Healthcheck para verificar se a aplicação está respondendo
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3040/api/health || exit 1
+  CMD curl -f http://localhost:3040/ || exit 1
 
 # Instalar curl para healthcheck
 USER root

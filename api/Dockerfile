@@ -1,66 +1,94 @@
-# Dockerfile otimizado para API Python com Claude SDK
+# 🚀 Claude Code API Docker - Configuração Completa
 FROM python:3.11-slim
 
-# Metadados da imagem
-LABEL maintainer="Claude API Team <api@example.com>" \
-      version="1.0.0" \
-      description="Claude Code SDK API - Otimizada e Segura"
+LABEL maintainer="CC-SDK-Chat API"
+LABEL version="1.0.0" 
+LABEL description="FastAPI com Claude Code SDK integrado"
 
-# Atualiza pip para versão mais recente
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
-# Instala dependências essenciais do sistema
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Cria usuário não-root para segurança
-RUN groupadd --gid 1001 claude && \
-    useradd --uid 1001 --gid claude --shell /bin/bash --create-home claude
-
-# Define diretórios de trabalho
+# Define diretório de trabalho
 WORKDIR /app
 
-# Cria diretórios para sessões e dados com permissões corretas
-RUN mkdir -p /app/sessions /app/data /app/logs && \
-    chown -R claude:claude /app
+# Instala dependências do sistema e Node.js para Claude Code CLI
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg \
+    git \
+    build-essential \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g @anthropic-ai/claude-code \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copia requirements primeiro para otimizar cache do Docker
-COPY requirements.txt ./
+# Copia arquivos de requisitos primeiro (para cache do Docker)
+COPY requirements.txt .
 
 # Instala dependências Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copia o SDK do Claude com permissões corretas
-COPY --chown=claude:claude claude-code-sdk-python /app/claude-code-sdk-python
+# Copia código da aplicação  
+COPY . .
 
-# Copia código da aplicação
-COPY --chown=claude:claude *.py ./
+# Criar script de bypass Claude Code
+RUN echo '#!/bin/bash' > /usr/local/bin/claude-bypass && \
+    echo 'export CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true' >> /usr/local/bin/claude-bypass && \
+    echo 'export CLAUDE_AUTO_APPROVE_MCP=true' >> /usr/local/bin/claude-bypass && \
+    echo 'export CLAUDE_TRUST_ALL_DIRECTORIES=true' >> /usr/local/bin/claude-bypass && \
+    echo 'export CLAUDE_DISABLE_TELEMETRY=1' >> /usr/local/bin/claude-bypass && \
+    echo 'export CLAUDE_BYPASS_PERMISSIONS=true' >> /usr/local/bin/claude-bypass && \
+    echo 'export CLAUDE_NO_PROMPT=true' >> /usr/local/bin/claude-bypass && \
+    echo 'export CLAUDE_AUTO_APPROVE=true' >> /usr/local/bin/claude-bypass && \
+    echo 'exec claude --dangerously-skip-permissions "$@"' >> /usr/local/bin/claude-bypass && \
+    chmod +x /usr/local/bin/claude-bypass
 
-# Muda para usuário não-root
-USER claude
+# Criar claude-safe como link
+RUN ln -sf /usr/local/bin/claude-bypass /usr/local/bin/claude-safe
 
-# Configura variáveis de ambiente
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH="/app:/app/claude-code-sdk-python" \
-    PORT=8989 \
-    HOST=0.0.0.0 \
-    SESSIONS_DIR=/app/sessions \
-    DATA_DIR=/app/data \
-    LOG_LEVEL=INFO
+# Cria usuário não-root com mesmo UID (1002 para compatibilidade)
+RUN useradd -m -u 1002 -s /bin/bash appuser && \
+    chown -R appuser:appuser /app
 
-# Expõe porta
-EXPOSE 8989
+# Configurar para o usuário appuser
+USER appuser
 
-# Volumes para persistência de dados
-VOLUME ["/app/sessions", "/app/data", "/app/logs"]
+# Criar diretório .claude para o appuser
+RUN mkdir -p /home/appuser/.claude
 
-# Healthcheck otimizado - verifica tanto o endpoint quanto a saúde da aplicação
-HEALTHCHECK --interval=30s --timeout=15s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8989/ --max-time 10 || exit 1
+# Criar settings.local.json permissivo para Claude Code
+RUN echo '{"permissions":{"allow":["*"],"deny":[],"ask":[]},"trustWorkspace":true,"autoApprove":true,"dangerouslySkipPermissions":true}' > /home/appuser/.claude/settings.local.json
 
-# Comando para iniciar aplicação com configurações otimizadas
+# Adicionar configurações ao bashrc do appuser
+RUN echo '# Claude Code Bypass Configuration' >> /home/appuser/.bashrc && \
+    echo 'export CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true' >> /home/appuser/.bashrc && \
+    echo 'export CLAUDE_AUTO_APPROVE=true' >> /home/appuser/.bashrc && \
+    echo 'export CLAUDE_TRUST_ALL_DIRECTORIES=true' >> /home/appuser/.bashrc && \
+    echo 'export CLAUDE_AUTO_APPROVE_MCP=true' >> /home/appuser/.bashrc && \
+    echo 'export CLAUDE_BYPASS_PERMISSIONS=true' >> /home/appuser/.bashrc && \
+    echo 'export CLAUDE_NO_PROMPT=true' >> /home/appuser/.bashrc && \
+    echo 'export CLAUDE_DISABLE_TELEMETRY=1' >> /home/appuser/.bashrc && \
+    echo 'alias claude="/usr/local/bin/claude-bypass"' >> /home/appuser/.bashrc && \
+    echo 'alias claude-safe="/usr/local/bin/claude-bypass"' >> /home/appuser/.bashrc && \
+    echo 'alias cs="claude-safe"' >> /home/appuser/.bashrc
+
+# Configurar variáveis de ambiente permanentes
+ENV CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true
+ENV CLAUDE_AUTO_APPROVE=true
+ENV CLAUDE_TRUST_ALL_DIRECTORIES=true
+ENV CLAUDE_AUTO_APPROVE_MCP=true
+ENV CLAUDE_BYPASS_PERMISSIONS=true
+ENV CLAUDE_NO_PROMPT=true
+ENV CLAUDE_DISABLE_TELEMETRY=1
+
+# Variáveis da aplicação
+ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=INFO
+ENV PORT=8990
+
+# Expõe porta da API
+EXPOSE 8990
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8990/ || exit 1
+
+# Comando para iniciar a aplicação
 CMD ["python3", "-u", "server.py"]

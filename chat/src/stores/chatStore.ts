@@ -159,7 +159,7 @@ const useChatStore = create<ChatStore>()(
         let tempSessionId = null
         
         // Encontra a sessão temporária atual (pode ter qualquer ID temp-*)
-        for (const [sessionId, session] of state.sessions) {
+        for (const [sessionId, session] of Array.from(state.sessions)) {
           console.log(`   Verificando: ${sessionId} (temp? ${sessionId.startsWith('temp-')})`)
           if (sessionId.startsWith('temp-') || sessionId === 'awaiting-real-session') {
             tempSession = session
