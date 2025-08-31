@@ -10,6 +10,8 @@ interface MessageInputProps {
   isStreaming?: boolean
   disabled?: boolean
   placeholder?: string
+  sessionId?: string
+  isFirstMessage?: boolean
 }
 
 export function MessageInput({
@@ -17,7 +19,9 @@ export function MessageInput({
   onInterrupt,
   isStreaming = false,
   disabled = false,
-  placeholder = "Digite sua mensagem... (Ctrl+Enter para enviar)"
+  placeholder = "Digite sua mensagem... (Ctrl+Enter para enviar)",
+  sessionId,
+  isFirstMessage = false
 }: MessageInputProps) {
   const [message, setMessage] = React.useState('')
   const [isComposing, setIsComposing] = React.useState(false)
@@ -37,9 +41,57 @@ export function MessageInput({
     textareaRef.current?.focus()
   })
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (message.trim() && !disabled && !isStreaming) {
-      onSend(message.trim())
+      let finalMessage = message.trim()
+      
+      // 🔗 DETECÇÃO INTELIGENTE: Se for primeira mensagem, buscar contexto anterior
+      if (isFirstMessage && sessionId) {
+        try {
+          const projectPath = window.location.pathname.split('/').slice(1).join('/')
+          const baseProjectPath = `/home/suthub/.claude/projects/${projectPath}`
+          
+          const response = await fetch('/api/load-project-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              projectPath: baseProjectPath,
+              primarySessionId: sessionId 
+            })
+          })
+          
+          if (response.ok) {
+            const { sessions, totalFiles } = await response.json()
+            
+            // Se encontrou outras sessões, incluir contexto
+            if (sessions.length > 1 || totalFiles > 1) {
+              const otherSessions = sessions.filter((s: any) => s.id !== sessionId)
+              if (otherSessions.length > 0) {
+                const latestSession = otherSessions[otherSessions.length - 1]
+                const recentMessages = latestSession.messages.slice(-2) // Últimas 2 mensagens
+                
+                const contextSummary = recentMessages
+                  .map((msg: any) => `${msg.role}: ${msg.content.substring(0, 100)}...`)
+                  .join('\n')
+                
+                finalMessage = `[CONTEXTO AUTOMÁTICO] Continuando conversa iniciada no terminal.
+                
+Sessão anterior: ${latestSession.id}
+Últimas mensagens:
+${contextSummary}
+
+---
+Mensagem atual: ${finalMessage}`
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao buscar contexto anterior:', error)
+          // Continue com mensagem original se houver erro
+        }
+      }
+      
+      onSend(finalMessage)
       setMessage('')
       textareaRef.current?.focus()
     }

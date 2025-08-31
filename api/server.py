@@ -13,6 +13,7 @@ import uuid
 from claude_handler import ClaudeHandler, SessionConfig
 from analytics_service import AnalyticsService
 from session_manager import ClaudeCodeSessionManager
+from session_validator import SessionValidator
 
 app = FastAPI(
     title="Claude Chat API",
@@ -93,6 +94,7 @@ app.add_middleware(
 claude_handler = ClaudeHandler()
 analytics_service = AnalyticsService()
 session_manager = ClaudeCodeSessionManager()
+session_validator = SessionValidator()
 
 class ChatMessage(BaseModel):
     """Modelo para mensagem de chat."""
@@ -229,13 +231,28 @@ async def send_message(chat_message: ChatMessage) -> StreamingResponse:
     # Gera session_id se não fornecido
     session_id = chat_message.session_id or str(uuid.uuid4())
     
+    # Valida e migra session_id se necessário
+    validated_session_id, was_migrated = session_validator.validate_and_migrate_session(session_id)
+    
     async def generate():
         """Gera stream SSE."""
         try:
+            # Se foi migrado, envia evento informando
+            if was_migrated:
+                migration_data = json.dumps({
+                    "type": "session_migrated",
+                    "original_session_id": session_id,
+                    "session_id": validated_session_id,
+                    "migrated": True
+                })
+                yield f"data: {migration_data}\n\n"
+            
             async for response in claude_handler.send_message(
-                session_id, 
+                validated_session_id, 
                 chat_message.message
             ):
+                # Adiciona session_id validado em todas as respostas
+                response["session_id"] = validated_session_id
                 # Formato SSE
                 data = json.dumps(response)
                 yield f"data: {data}\n\n"
@@ -244,12 +261,19 @@ async def send_message(chat_message: ChatMessage) -> StreamingResponse:
             error_data = json.dumps({
                 "type": "error",
                 "error": str(e),
-                "session_id": session_id
+                "session_id": validated_session_id
             })
             yield f"data: {error_data}\n\n"
         finally:
-            # Envia evento de fim
-            yield f"data: {json.dumps({'type': 'done', 'session_id': session_id})}\n\n"
+            # Envia evento de fim com session_id validado
+            final_data = {
+                'type': 'done', 
+                'session_id': validated_session_id
+            }
+            if was_migrated:
+                final_data['migrated'] = True
+                final_data['original_session_id'] = session_id
+            yield f"data: {json.dumps(final_data)}\n\n"
     
     return StreamingResponse(
         generate(),
@@ -257,7 +281,8 @@ async def send_message(chat_message: ChatMessage) -> StreamingResponse:
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Session-ID": session_id
+            "X-Session-ID": validated_session_id,
+            "X-Was-Migrated": str(was_migrated).lower()
         }
     )
 
@@ -774,6 +799,96 @@ async def get_session_analytics(session_id: str):
         }
     except Exception as e:
         return {"error": str(e)}
+
+@app.get(
+    "/api/validate-session/{session_id}",
+    tags=["Sessões"],
+    summary="Validar Sessão",
+    description="Valida se uma sessão existe e pode ser usada para redirecionamento",
+    response_description="Status de validação da sessão"
+)
+async def validate_session(session_id: str = Path(..., description="ID da sessão para validar")):
+    """Valida se uma sessão existe e é válida para uso."""
+    validation = session_validator.validate_session_for_redirect(session_id)
+    
+    if validation['can_redirect']:
+        return {
+            "valid": True,
+            "session_id": session_id,
+            "message": "Sessão válida e existe no sistema"
+        }
+    else:
+        return {
+            "valid": False,
+            "session_id": session_id,
+            "error": validation['error'],
+            "details": {
+                "exists": validation['exists'],
+                "is_temporary": validation['is_temporary'],
+                "is_valid_uuid": validation['valid']
+            }
+        }
+
+@app.get(
+    "/api/real-sessions",
+    tags=["Sessões"],
+    summary="Listar Sessões Reais",
+    description="Retorna lista de IDs de sessões que realmente existem no sistema",
+    response_description="Lista de sessões reais existentes"
+)
+async def get_real_sessions():
+    """Lista todas as sessões reais que existem no sistema."""
+    real_sessions = session_validator.get_real_session_ids()
+    return {
+        "sessions": list(real_sessions),
+        "count": len(real_sessions),
+        "message": f"Encontradas {len(real_sessions)} sessões reais no sistema"
+    }
+
+@app.post(
+    "/api/load-project-history",
+    tags=["Sessões"],
+    summary="Carregar Histórico do Projeto",
+    description="Carrega histórico completo de todas as sessões do projeto",
+    response_description="Histórico unificado do projeto"
+)
+async def load_project_history(request: dict):
+    """Carrega histórico completo do projeto com todas as sessões."""
+    try:
+        project_path = request.get('projectPath')
+        primary_session_id = request.get('primarySessionId')
+        
+        # Busca todas as sessões reais no projeto
+        real_sessions = session_validator.get_real_session_ids()
+        sessions_data = []
+        
+        for session_id in real_sessions:
+            try:
+                # Usa o endpoint existente para carregar histórico da sessão
+                session_history = await get_session_history(session_id)
+                
+                if 'error' not in session_history and session_history.get('messages'):
+                    sessions_data.append({
+                        'id': session_id,
+                        'messages': session_history['messages'],
+                        'origin': 'Claude Code',
+                        'createdAt': session_history.get('first_message_time'),
+                        'cwd': project_path
+                    })
+            except Exception as e:
+                print(f"⚠️ Erro ao carregar sessão {session_id}: {e}")
+                continue
+        
+        return {
+            "sessions": sessions_data,
+            "isSingleSession": len(sessions_data) == 1,
+            "continuationMode": primary_session_id in real_sessions,
+            "projectPath": project_path,
+            "totalSessions": len(sessions_data)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao carregar histórico: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

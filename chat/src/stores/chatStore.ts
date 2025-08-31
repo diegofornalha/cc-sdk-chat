@@ -52,6 +52,7 @@ interface ChatStore {
   deleteSession: (sessionId: string) => void
   setActiveSession: (sessionId: string) => void
   updateSessionConfig: (sessionId: string, config: SessionConfig) => void
+  migrateToRealSession: (realSessionId: string) => void
   
   // Ações de mensagem
   addMessage: (sessionId: string, message: Omit<Message, 'id'>) => void
@@ -72,6 +73,7 @@ interface ChatStore {
   exportSession: (sessionId: string) => Session | null
   importSession: (session: Session) => void
   loadExternalSession: (sessionData: any) => void
+  loadCrossSessionHistory: (primarySessionId: string) => Promise<void>
 }
 
 const useChatStore = create<ChatStore>()(
@@ -82,15 +84,17 @@ const useChatStore = create<ChatStore>()(
     streamingContent: '',
     
     createSession: (config = {}) => {
-      const sessionId = `session-${Date.now()}-${Math.random().toString(36).substring(7)}`
+      // ✅ CORREÇÃO: Apenas cria sessão local temporária SEM placeholder
+      // O SDK gerará o session_id real na primeira mensagem
+      const tempSessionId = `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`
       const newSession: Session = {
-        id: sessionId,
-        title: `Nova Conversa ${new Date().toLocaleDateString('pt-BR')}`,
+        id: tempSessionId,
+        title: '💬 Nova conversa',
         messages: [],
         config: {
-          systemPrompt: config.systemPrompt || 'Você é um assistente útil.',
+          systemPrompt: config.systemPrompt || 'Nova conversa Claude Code',
           allowedTools: config.allowedTools || [],
-          maxTurns: config.maxTurns || 20,
+          maxTurns: config.maxTurns || 50,
           permissionMode: config.permissionMode || 'acceptEdits',
           cwd: config.cwd || undefined
         },
@@ -104,11 +108,11 @@ const useChatStore = create<ChatStore>()(
       }
       
       set((state) => {
-        state.sessions.set(sessionId, newSession)
-        state.activeSessionId = sessionId
+        state.sessions.set(tempSessionId, newSession)
+        state.activeSessionId = tempSessionId
       })
       
-      return sessionId
+      return tempSessionId
     },
     
     deleteSession: (sessionId) => {
@@ -125,6 +129,117 @@ const useChatStore = create<ChatStore>()(
       set((state) => {
         if (state.sessions.has(sessionId)) {
           state.activeSessionId = sessionId
+        }
+      })
+    },
+
+    migrateToRealSession: (realSessionId) => {
+      set((state) => {
+        console.log('╔════════════════════════════════════════╗')
+        console.log('║   🔄 INICIANDO MIGRAÇÃO NO STORE       ║')
+        console.log('╚════════════════════════════════════════╝')
+        console.log(`├─ realSessionId recebido: ${realSessionId}`)
+        console.log(`├─ activeSessionId atual: ${state.activeSessionId}`)
+        console.log(`├─ Total de sessões: ${state.sessions.size}`)
+        console.log(`└─ Sessões existentes: ${Array.from(state.sessions.keys()).join(', ')}`)
+        
+        // 🔥 PROTEÇÃO ADICIONAL: Validação prévia antes da migração
+        
+        // Valida formato UUID do session_id real
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        if (!uuidRegex.test(realSessionId)) {
+          console.error(`❌ Session ID inválido (não é UUID): ${realSessionId}`)
+          return // Aborta migração
+        }
+        
+        console.log('✅ UUID válido, procurando sessão temporária...')
+        
+        // ✅ CORREÇÃO: Migra qualquer sessão temporária para sessão real do SDK
+        let tempSession = null
+        let tempSessionId = null
+        
+        // Encontra a sessão temporária atual (pode ter qualquer ID temp-*)
+        for (const [sessionId, session] of state.sessions) {
+          console.log(`   Verificando: ${sessionId} (temp? ${sessionId.startsWith('temp-')})`)
+          if (sessionId.startsWith('temp-') || sessionId === 'awaiting-real-session') {
+            tempSession = session
+            tempSessionId = sessionId
+            console.log(`   ✅ Sessão temporária encontrada: ${sessionId}`)
+            break
+          }
+        }
+        
+        if (tempSession && tempSessionId) {
+          // 🔒 PROTEÇÃO: Verifica se não há sessão real com esse ID já existente
+          if (state.sessions.has(realSessionId)) {
+            console.log(`ℹ️ Sessão real ${realSessionId} já existe - apenas atualizando ativa`)
+            state.activeSessionId = realSessionId
+            state.sessions.delete(tempSessionId) // Remove temporária
+            return
+          }
+          
+          // Cria nova sessão com ID real do SDK, mantendo dados da temporária
+          const realSession: Session = {
+            ...tempSession,
+            id: realSessionId,
+            title: `💬 Sessão ${realSessionId.slice(-8)}`,
+            updatedAt: new Date()
+          }
+          
+          console.log('\n📦 EXECUTANDO MIGRAÇÃO:')
+          console.log(`   ├─ ID antigo: ${tempSessionId}`)
+          console.log(`   ├─ ID novo: ${realSessionId}`)
+          console.log(`   ├─ Título: ${realSession.title}`)
+          console.log(`   └─ Mensagens: ${realSession.messages.length}`)
+          
+          // Adiciona a sessão real
+          state.sessions.set(realSessionId, realSession)
+          console.log(`   ✅ Sessão real adicionada ao Map`)
+          
+          // Remove sessão temporária
+          state.sessions.delete(tempSessionId)
+          console.log(`   ✅ Sessão temporária removida`)
+          
+          // Atualiza sessão ativa
+          state.activeSessionId = realSessionId
+          console.log(`   ✅ activeSessionId atualizado: ${state.activeSessionId}`)
+          
+          console.log(`\n✅ MIGRAÇÃO CONCLUÍDA COM SUCESSO!`)
+          console.log(`   Nova sessão ativa: ${state.activeSessionId}`)
+          console.log('╚════════════════════════════════════════╝\n')
+        } else {
+          console.warn(`⚠️ Nenhuma sessão temporária encontrada para migrar para: ${realSessionId}`)
+          
+          // 🔄 FALLBACK: Se não há sessão temporária mas session_id é válido,
+          // cria sessão diretamente (caso de carregamento direto via URL)
+          if (!state.sessions.has(realSessionId)) {
+            console.log(`🆕 Criando sessão real diretamente: ${realSessionId}`)
+            const newRealSession: Session = {
+              id: realSessionId,
+              title: `💬 Sessão ${realSessionId.slice(-8)}`,
+              messages: [],
+              config: {
+                systemPrompt: 'Sessão restaurada do Claude Code',
+                allowedTools: [],
+                maxTurns: 20,
+                permissionMode: 'acceptEdits',
+                cwd: undefined
+              },
+              metrics: {
+                totalTokens: 0,
+                totalCost: 0,
+                messageCount: 0
+              },
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }
+            
+            state.sessions.set(realSessionId, newRealSession)
+            state.activeSessionId = realSessionId
+          } else {
+            // Sessão já existe, apenas ativa
+            state.activeSessionId = realSessionId
+          }
         }
       })
     },
@@ -276,6 +391,114 @@ const useChatStore = create<ChatStore>()(
         state.sessions.set(sessionId, newSession)
         state.activeSessionId = sessionId
       })
+    },
+
+    loadCrossSessionHistory: async (primarySessionId: string) => {
+      const projectPath = '/home/suthub/.claude/projects/-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
+      
+      try {
+        // Lista todos os arquivos JSONL do projeto
+        const response = await fetch('/api/load-project-history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            projectPath,
+            primarySessionId 
+          })
+        })
+        
+        if (!response.ok) return
+        
+        const { sessions, isSingleSession, continuationMode } = await response.json()
+        
+        set((state) => {
+          // SEMPRE CARREGA TODAS AS SESSÕES DO PROJETO
+          // Cria uma visualização unificada independente do número de sessões
+          
+          // Primeiro, cria uma sessão especial "PROJETO UNIFICADO"
+          const unifiedSessionId = `project-${primarySessionId}`
+          
+          // Combina todas as mensagens de todas as sessões em ordem cronológica
+          const allMessages: any[] = []
+          
+          sessions.forEach((sessionData: any) => {
+            sessionData.messages.forEach((msg: any) => {
+              allMessages.push({
+                ...msg,
+                sessionOrigin: sessionData.id,
+                sessionTitle: sessionData.origin || 'Claude Code',
+                timestamp: new Date(msg.timestamp)
+              })
+            })
+          })
+          
+          // Ordena todas as mensagens por timestamp
+          allMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+          
+          // Cria sessão unificada com timeline completa
+          const unifiedSession: Session = {
+            id: unifiedSessionId,
+            title: `📋 Projeto Completo (${sessions.length} sessões)`,
+            messages: allMessages,
+            config: {
+              systemPrompt: `Timeline unificada do projeto - ${sessions.length} sessões combinadas`,
+              allowedTools: [],
+              maxTurns: 100,
+              permissionMode: 'acceptEdits',
+              cwd: sessions[0]?.cwd
+            },
+            metrics: {
+              totalTokens: allMessages.reduce((total, msg) => 
+                total + (msg.tokens?.input || 0) + (msg.tokens?.output || 0), 0),
+              totalCost: allMessages.reduce((total, msg) => 
+                total + (msg.cost || 0), 0),
+              messageCount: allMessages.length
+            },
+            createdAt: new Date(sessions[0]?.createdAt || Date.now()),
+            updatedAt: new Date()
+          }
+          
+          // Adiciona a sessão unificada
+          state.sessions.set(unifiedSessionId, unifiedSession)
+          
+          // Carrega também cada sessão individual como abas separadas
+          sessions.forEach((sessionData: any) => {
+            if (!state.sessions.has(sessionData.id)) {
+              const session: Session = {
+                id: sessionData.id,
+                title: `${sessionData.origin === 'SDK Web' ? '🌐' : '🖥️'} ${sessionData.origin || 'Terminal'} (${sessionData.id.slice(-8)})`,
+                messages: sessionData.messages.map((msg: any) => ({
+                  ...msg,
+                  timestamp: new Date(msg.timestamp)
+                })),
+                config: {
+                  systemPrompt: `Sessão individual - ${sessionData.origin || 'Claude Code'}`,
+                  allowedTools: [],
+                  maxTurns: 20,
+                  permissionMode: 'acceptEdits',
+                  cwd: sessionData.cwd
+                },
+                metrics: {
+                  totalTokens: sessionData.messages.reduce((total: number, msg: any) => 
+                    total + (msg.tokens?.input || 0) + (msg.tokens?.output || 0), 0),
+                  totalCost: sessionData.messages.reduce((total: number, msg: any) => 
+                    total + (msg.cost || 0), 0),
+                  messageCount: sessionData.messages.length
+                },
+                createdAt: new Date(sessionData.createdAt || Date.now()),
+                updatedAt: new Date()
+              }
+              
+              state.sessions.set(sessionData.id, session)
+            }
+          })
+          
+          // Define a sessão UNIFICADA como ativa (mostra timeline completa)
+          state.activeSessionId = unifiedSessionId
+        })
+      } catch (error) {
+        console.error('Erro ao carregar histórico cruzado:', error)
+      }
     }
   }))
 )

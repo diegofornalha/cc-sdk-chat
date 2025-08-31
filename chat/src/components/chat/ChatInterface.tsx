@@ -41,7 +41,9 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     updateMetrics,
     getActiveSession,
     clearSession,
-    loadExternalSession
+    loadExternalSession,
+    loadCrossSessionHistory,
+    migrateToRealSession
   } = useChatStore()
 
   const [showConfigModal, setShowConfigModal] = React.useState(false)
@@ -64,15 +66,84 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
       console.log('📥 Carregando', sessionData.messages.length, 'mensagens');
       // Usa função do store para carregar sessão externa (resolve problema Immer)
       loadExternalSession(sessionData)
-      toast.success(`📋 Histórico carregado: ${sessionData.messages.length} mensagens`)
+      
+      // Carrega também histórico cruzado de outras sessões do projeto
+      loadCrossSessionHistory(sessionData.id).then(() => {
+        console.log('🔗 Histórico cruzado carregado para sessão:', sessionData.id)
+        
+        // Verifica se é continuação (1 arquivo) ou múltiplas sessões
+        const sessionCount = sessions.size
+        if (sessionCount === 1) {
+          toast.success(`💬 Continuando conversa do Terminal`)
+        } else {
+          toast.success(`📋 Histórico unificado: ${sessionCount} sessões carregadas`)
+        }
+      }).catch(error => {
+        console.error('❌ Erro ao carregar histórico cruzado:', error)
+        toast.error('Erro ao carregar histórico completo')
+      })
     }
-  }, [sessionData, loadExternalSession])
+  }, [sessionData, loadExternalSession, loadCrossSessionHistory])
 
-  // Inicializar com uma sessão se não houver nenhuma
+  // 🔥 INICIALIZAÇÃO INTELIGENTE: Busca sessões reais antes de criar temporárias
   React.useEffect(() => {
     if (sessions.size === 0 && !sessionData) {
-      console.log('🆕 Criando nova sessão (sem sessionData)');
-      createSession()
+      console.log('🔍 Verificando sessões reais disponíveis antes de criar nova...');
+      
+      // Primeiro verifica se há sessões reais no sistema
+      fetch('/api/real-sessions')
+        .then(response => response.json())
+        .then(result => {
+          const realSessions = result.sessions || []
+          console.log(`📋 Encontradas ${realSessions.length} sessões reais:`, realSessions.slice(0, 3))
+          
+          if (realSessions.length > 0) {
+            // ✅ HÁ SESSÕES REAIS: Usa a mais recente em vez de criar temporária
+            const latestRealSession = realSessions[0] // Primeira é a mais recente
+            console.log(`🎯 Usando sessão real existente: ${latestRealSession}`)
+            
+            // Carrega a sessão real diretamente
+            fetch(`/api/session-history/${latestRealSession}`)
+              .then(response => response.json())
+              .then(sessionHistory => {
+                if (sessionHistory && sessionHistory.messages) {
+                  console.log(`📥 Carregando ${sessionHistory.messages.length} mensagens da sessão ${latestRealSession}`)
+                  loadExternalSession({
+                    id: latestRealSession,
+                    messages: sessionHistory.messages
+                  })
+                  
+                  // Redireciona para a sessão real se estivermos na home
+                  const currentPath = window.location.pathname
+                  if (currentPath === '/' || currentPath === '') {
+                    const projectPath = '-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
+                    const newUrl = `/${projectPath}/${latestRealSession}`
+                    console.log(`🚀 Redirecionando para sessão real existente: ${newUrl}`)
+                    router.push(newUrl)
+                  }
+                } else {
+                  // Sessão existe mas sem histórico - cria vazia
+                  migrateToRealSession(latestRealSession)
+                }
+              })
+              .catch(error => {
+                console.error('❌ Erro ao carregar sessão real:', error)
+                // Fallback: cria sessão temporária
+                console.log('🔄 Fallback: criando sessão temporária')
+                createSession()
+              })
+          } else {
+            // ❌ NENHUMA SESSÃO REAL: Cria sessão temporária normalmente
+            console.log('🆕 Nenhuma sessão real encontrada - criando temporária')
+            createSession()
+          }
+        })
+        .catch(error => {
+          console.error('❌ Erro ao verificar sessões reais:', error)
+          // Fallback: cria sessão temporária
+          console.log('🔄 Erro na verificação - criando sessão temporária')
+          createSession()
+        })
     } else if (sessionData) {
       console.log('📂 sessionData presente, aguardando carregamento...');
     }
@@ -85,14 +156,29 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
   }
 
   const handleSendMessage = async (content: string) => {
-    if (!activeSessionId || isStreaming) return
+    if (isStreaming) return
 
-    // Adiciona mensagem do usuário
-    addMessage(activeSessionId, {
-      role: 'user',
-      content,
-      timestamp: new Date()
-    })
+    // ✅ CORREÇÃO: Lógica simplificada - sempre adiciona mensagem primeiro
+    // O SDK retornará o session_id real que usaremos para migração
+    
+    let currentSessionId = activeSessionId
+    
+    // Debug inicial
+    console.log(`🚀 Enviando mensagem - Sessão atual: ${currentSessionId}`)
+    console.log(`📊 Tipo de sessão: ${currentSessionId?.startsWith('temp-') ? 'TEMPORÁRIA' : 'REAL'}`)
+    
+    // Sempre adiciona a mensagem do usuário à sessão atual (temporária ou real)
+    if (currentSessionId) {
+      addMessage(currentSessionId, {
+        role: 'user',
+        content,
+        timestamp: new Date()
+      })
+      console.log(`📝 Mensagem adicionada à sessão: ${currentSessionId}`)
+    } else {
+      console.error('⚠️ Nenhuma sessão ativa encontrada!')
+      return
+    }
 
     // Inicia streaming
     setStreaming(true)
@@ -119,9 +205,77 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
               break
             
             case 'result':
+              // 🔥 DEBUG COMPLETO DA MIGRAÇÃO
+              console.log('╔════════════════════════════════════════╗')
+              console.log('║     📊 RESULT RECEBIDO DO SDK          ║')
+              console.log('╚════════════════════════════════════════╝')
+              console.log(`├─ session_id do SDK: ${data.session_id}`)
+              console.log(`├─ currentSessionId: ${currentSessionId}`)
+              console.log(`├─ activeSessionId (store): ${activeSessionId}`)
+              console.log(`├─ É temporária? ${currentSessionId?.startsWith('temp-')}`)
+              console.log(`└─ Timestamp: ${new Date().toISOString()}`)
+              
+              // MIGRAÇÃO IMEDIATA: SDK retornou session_id real
+              if (data.session_id) {
+                // SEMPRE migra se a sessão atual é temporária
+                if (currentSessionId && currentSessionId.startsWith('temp-')) {
+                  console.log('\n🔄 INICIANDO MIGRAÇÃO DE SESSÃO TEMPORÁRIA')
+                  console.log(`   ├─ DE: ${currentSessionId}`)
+                  console.log(`   └─ PARA: ${data.session_id}`)
+                  
+                  // Migração IMEDIATA sem validação desnecessária
+                  console.log('   📦 Executando migrateToRealSession()...')
+                  migrateToRealSession(data.session_id)
+                  
+                  // Atualiza referência local
+                  currentSessionId = data.session_id
+                  console.log(`   ✅ SessionId atualizado localmente: ${currentSessionId}`)
+                  
+                  // Aguarda um tick para garantir que o store foi atualizado
+                  setTimeout(() => {
+                    const updatedActiveSession = getActiveSession()
+                    console.log('   🔍 Verificando store após migração:')
+                    console.log(`      ├─ activeSession.id: ${updatedActiveSession?.id}`)
+                    console.log(`      └─ activeSession.title: ${updatedActiveSession?.title}`)
+                    
+                    // Força re-renderização se necessário
+                    if (updatedActiveSession?.id !== data.session_id) {
+                      console.warn('   ⚠️ Store não atualizou! Forçando...')
+                      setActiveSession(data.session_id)
+                    }
+                  }, 100)
+                  
+                  // Atualiza a URL imediatamente
+                  const currentPath = window.location.pathname
+                  console.log(`   📍 Path atual: ${currentPath}`)
+                  
+                  if (currentPath === '/' || currentPath === '' || currentPath.includes('temp-')) {
+                    const projectPath = '-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
+                    const newUrl = `/${projectPath}/${data.session_id}`
+                    console.log(`   🚀 REDIRECIONANDO para: ${newUrl}`)
+                    router.push(newUrl)
+                    toast.success(`✅ Sessão real: ${data.session_id.slice(-8)}`)
+                  } else {
+                    console.log(`   ℹ️ Mantendo URL atual: ${currentPath}`)
+                  }
+                } else if (data.session_id !== currentSessionId) {
+                  // Sessão já é real mas diferente - apenas atualiza
+                  console.log('\n📝 Atualizando referência de sessão real')
+                  console.log(`   ├─ DE: ${currentSessionId}`)
+                  console.log(`   └─ PARA: ${data.session_id}`)
+                  currentSessionId = data.session_id
+                }
+              } else {
+                console.log('⚠️ SDK não retornou session_id!')
+              }
+              console.log('╚════════════════════════════════════════╝\n')
+              
+              // Usa o sessionId correto (pode ter sido atualizado acima)
+              const finalSessionId = data.session_id || currentSessionId || activeSessionId
+              
               // Adiciona mensagem completa do assistente
               if (currentContent) {
-                addMessage(activeSessionId, {
+                addMessage(finalSessionId, {
                   role: 'assistant',
                   content: currentContent,
                   timestamp: new Date(),
@@ -134,10 +288,10 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
                 })
               }
               
-              // Atualiza métricas
+              // Atualiza métricas com sessionId correto
               if (data.input_tokens || data.output_tokens || data.cost_usd) {
                 updateMetrics(
-                  activeSessionId,
+                  finalSessionId,
                   { input: data.input_tokens, output: data.output_tokens },
                   data.cost_usd
                 )
@@ -281,6 +435,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
                   tools={message.tools}
                   sessionTitle={activeSession.title}
                   sessionId={activeSession.id}
+                  sessionOrigin={(message as any).sessionOrigin}
                 />
               ))}
               
@@ -344,6 +499,8 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
             onInterrupt={handleInterrupt}
             isStreaming={isStreaming}
             disabled={!activeSessionId}
+            sessionId={activeSession?.id}
+            isFirstMessage={activeSession?.messages.length === 0}
           />
         </div>
       </div>

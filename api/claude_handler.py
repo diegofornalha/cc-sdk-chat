@@ -107,6 +107,9 @@ class ClaudeHandler:
         if session_id not in self.clients:
             await self.create_session(session_id)
             
+        # 🔥 CAPTURA DO SESSION_ID REAL: O SDK pode gerar um session_id próprio
+        real_session_id = session_id  # Começamos com o fornecido
+            
         client = self.clients[session_id]
         
         # Buffer para acumular texto antes de enviar
@@ -124,7 +127,7 @@ class ClaudeHandler:
                 yield {
                     "type": "assistant_text",
                     "content": combined_text,
-                    "session_id": session_id
+                    "session_id": real_session_id
                 }
                 text_buffer = []
                 buffer_size = 0
@@ -132,12 +135,12 @@ class ClaudeHandler:
         try:
             # Notifica que começou a processar
             yield {
-                "type": "processing",
-                "session_id": session_id
+                "type": "processing", 
+                "session_id": real_session_id
             }
             
-            # Envia query
-            await client.query(message)
+            # Envia query (o SDK pode gerar um novo session_id internamente)
+            await client.query(message, session_id=session_id)
             
             # Stream de respostas com buffer
             async for msg in client.receive_response():
@@ -166,7 +169,7 @@ class ClaudeHandler:
                                 "type": "tool_use",
                                 "tool": block.name,
                                 "id": block.id,
-                                "session_id": session_id
+                                "session_id": real_session_id
                             }
                             
                 elif isinstance(msg, UserMessage):
@@ -176,7 +179,7 @@ class ClaudeHandler:
                                 "type": "tool_result",
                                 "tool_id": block.tool_use_id,
                                 "content": block.content if block.content else "",
-                                "session_id": session_id
+                                "session_id": real_session_id
                             }
                             
                 elif isinstance(msg, ResultMessage):
@@ -184,9 +187,99 @@ class ClaudeHandler:
                     async for response in flush_buffer():
                         yield response
                     
+                    # 🔥 ESTRATÉGIA ROBUSTA: Encontra o session_id real via filesystem
+                    # Após cada interação, o Claude SDK cria/atualiza um arquivo .jsonl
+                    # Vamos buscar o arquivo mais recente para obter o session_id real
+                    
+                    sdk_session_id = None
+                    
+                    # Tentativa 1: Busca no filesystem o arquivo .jsonl mais recente
+                    try:
+                        import glob
+                        from pathlib import Path
+                        
+                        # Busca arquivos .jsonl criados/modificados nos últimos 10 segundos
+                        claude_projects = Path.home() / ".claude" / "projects"
+                        current_time = time.time()
+                        
+                        for project_dir in claude_projects.iterdir():
+                            if project_dir.is_dir() and "cc-sdk-chat" in project_dir.name:
+                                for jsonl_file in project_dir.glob("*.jsonl"):
+                                    file_mtime = jsonl_file.stat().st_mtime
+                                    # Se arquivo foi modificado nos últimos 10 segundos
+                                    if (current_time - file_mtime) <= 10:
+                                        # Este é provavelmente o arquivo da sessão atual
+                                        potential_session_id = jsonl_file.stem
+                                        
+                                        # Valida se é UUID válido
+                                        try:
+                                            import uuid
+                                            uuid.UUID(potential_session_id)
+                                            sdk_session_id = potential_session_id
+                                            print(f"🎯 Session ID real encontrado via filesystem: {sdk_session_id}")
+                                            break
+                                        except ValueError:
+                                            continue
+                            if sdk_session_id:
+                                break
+                    except Exception as e:
+                        print(f"⚠️ Erro ao buscar session_id via filesystem: {e}")
+                    
+                    # Tentativa 2: Métodos diretos do SDK (fallback)
+                    if not sdk_session_id:
+                        # Tentativa 2a: Atributo direto
+                        sdk_session_id = getattr(msg, 'session_id', None)
+                        
+                        # Tentativa 2b: Dentro de metadata ou context
+                        if not sdk_session_id and hasattr(msg, '_metadata'):
+                            sdk_session_id = getattr(msg._metadata, 'session_id', None)
+                            
+                        # Tentativa 2c: No dict interno da mensagem  
+                        if not sdk_session_id and hasattr(msg, '__dict__'):
+                            for key, value in msg.__dict__.items():
+                                if 'session' in key.lower() and isinstance(value, str) and len(value) > 10:
+                                    try:
+                                        import uuid
+                                        uuid.UUID(value)
+                                        sdk_session_id = value
+                                        print(f"🔍 Session ID encontrado via atributo {key}: {sdk_session_id}")
+                                        break
+                                    except ValueError:
+                                        continue
+                    
+                    # Se encontramos um session_id diferente E VÁLIDO, atualizamos
+                    if sdk_session_id and sdk_session_id != session_id:
+                        # Valida se o session_id encontrado realmente existe
+                        session_file_path = None
+                        try:
+                            from pathlib import Path
+                            claude_projects = Path.home() / ".claude" / "projects"
+                            for project_dir in claude_projects.iterdir():
+                                if project_dir.is_dir() and "cc-sdk-chat" in project_dir.name:
+                                    potential_file = project_dir / f"{sdk_session_id}.jsonl"
+                                    if potential_file.exists():
+                                        session_file_path = potential_file
+                                        break
+                                        
+                            if session_file_path:
+                                real_session_id = sdk_session_id
+                                print(f"✅ Session ID real validado: {real_session_id} (arquivo: {session_file_path})")
+                            else:
+                                # Session ID do SDK não tem arquivo correspondente
+                                print(f"⚠️ Session ID do SDK {sdk_session_id} não tem arquivo correspondente")
+                                real_session_id = session_id  # Mantém o original
+                        except Exception as e:
+                            print(f"❌ Erro ao validar session_id: {e}")
+                            real_session_id = session_id  # Mantém o original
+                    else:
+                        # Mantém session_id original
+                        real_session_id = session_id
+                        if not sdk_session_id:
+                            print(f"🔍 SDK não retornou session_id, mantendo cliente: {session_id}")
+                    
                     result_data = {
                         "type": "result",
-                        "session_id": session_id
+                        "session_id": real_session_id  # Usa o session_id validado
                     }
                     
                     # Adiciona informações de uso se disponível
@@ -221,7 +314,7 @@ class ClaudeHandler:
             yield {
                 "type": "error",
                 "error": str(e),
-                "session_id": session_id
+                "session_id": real_session_id
             }
             
     async def interrupt_session(self, session_id: str) -> bool:

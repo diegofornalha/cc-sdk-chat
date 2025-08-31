@@ -263,6 +263,7 @@ interface ChatMessageProps {
   isStreaming?: boolean
   sessionTitle?: string
   sessionId?: string
+  sessionOrigin?: string
 }
 
 export function ChatMessage({ 
@@ -274,10 +275,22 @@ export function ChatMessage({
   tools,
   isStreaming = false,
   sessionTitle,
-  sessionId
+  sessionId,
+  sessionOrigin
 }: ChatMessageProps) {
   const [copied, setCopied] = React.useState(false)
   const messageRef = React.useRef<HTMLDivElement>(null)
+  
+  // 🔍 DEBUG: Log do que está sendo exibido
+  React.useEffect(() => {
+    if (sessionId && role === 'assistant') {
+      console.log('📊 ChatMessage Debug:')
+      console.log(`   ├─ sessionId: ${sessionId}`)
+      console.log(`   ├─ sessionTitle: ${sessionTitle}`)
+      console.log(`   ├─ É temporária? ${sessionId?.startsWith('temp-')}`)
+      console.log(`   └─ Exibindo: ${sessionId?.startsWith('temp-') ? 'TEMPORÁRIA ❌' : `REAL ✅ (${sessionId.slice(-8)})`}`)
+    }
+  }, [sessionId, sessionTitle, role])
 
   // Função para verificar se um item é um bloco específico
   const isTextBlock = (item: any): item is TextBlock => {
@@ -473,7 +486,12 @@ export function ChatMessage({
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
-                  {role === 'user' ? 'Você' : `Claude${sessionTitle ? ` • ${sessionTitle}` : sessionId ? ` • ${sessionId.slice(-8)}` : ''}`}
+                  {role === 'user' ? 'Você' : `Claude${sessionTitle ? ` • ${sessionTitle}` : sessionId && !sessionId.startsWith('temp-') && !sessionId.startsWith('project-') ? ` • ${sessionId.slice(-8)}` : ''}`}
+                  {sessionOrigin && sessionOrigin !== sessionId && (
+                    <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded">
+                      {sessionTitle}
+                    </span>
+                  )}
                 </span>
                 {timestamp && (
                   <span className="text-xs text-muted-foreground">
@@ -528,8 +546,8 @@ export function ChatMessage({
                 {cost && (
                   <span>Custo: USD {cost.toFixed(6)}</span>
                 )}
-                {sessionId && !sessionId.startsWith('session-') && (
-                  <span>Sessão: {sessionId}</span>
+                {sessionId && !sessionId.startsWith('temp-') && !sessionId.startsWith('project-') && (
+                  <span>Sessão: {sessionId.slice(-8)}</span>
                 )}
               </div>
             )}
