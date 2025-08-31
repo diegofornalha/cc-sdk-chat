@@ -39,7 +39,7 @@ case $option in
         echo "✅ Containers iniciados!"
         echo ""
         echo "📍 Acesse:"
-        echo "   Frontend: http://localhost:3040"
+        echo "   Frontend: http://localhost:3082"
         echo "   API: http://localhost:8989"
         echo "   API Docs: http://localhost:8989/docs"
         ;;

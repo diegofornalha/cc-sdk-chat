@@ -237,7 +237,7 @@ Comandos Slash (dentro do TUI):
             elif args.web:
                 print("🌐 Iniciando viewer web...")
                 # TODO: Iniciar servidor web
-                print("📱 Web viewer: http://localhost:3040")
+                print("📱 Web viewer: http://localhost:3082")
             else:
                 # Modo padrão: TUI interativo
                 from ..tui.session_browser import SessionBrowser

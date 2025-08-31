@@ -29,7 +29,6 @@ export interface StreamResponse {
 class ChatAPI {
   private baseUrl: string;
   private sessionId: string | null = null;
-  private eventSource: EventSource | null = null;
 
   constructor(baseUrl?: string) {
     // Detecta automaticamente a URL baseado no ambiente
@@ -43,49 +42,16 @@ class ChatAPI {
         this.baseUrl = '';
       } else {
         // Em desenvolvimento, usa localhost
-        this.baseUrl = 'http://localhost:8990';
+        this.baseUrl = 'http://localhost:8992';
       }
     } else {
       // SSR ou ambiente Node.js
-      this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8990';
+      this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8992';
     }
   }
 
 
-  async createSession(): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/api/new-session`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
 
-    if (!response.ok) {
-      throw new Error('Failed to create session');
-    }
-
-    const data = await response.json();
-    this.sessionId = data.session_id;
-    return data.session_id;
-  }
-
-  async createSessionWithConfig(config: any): Promise<string> {
-    const response = await fetch(`${this.baseUrl}/api/session-with-config`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(config),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create session with config');
-    }
-
-    const data = await response.json();
-    this.sessionId = data.session_id;
-    return data.session_id;
-  }
 
   async sendMessage(
     message: string,
@@ -93,14 +59,7 @@ class ChatAPI {
     onError?: (error: string) => void,
     onComplete?: () => void
   ): Promise<void> {
-    if (!this.sessionId) {
-      this.sessionId = await this.createSession();
-    }
-
-    // Fecha EventSource anterior se existir
-    if (this.eventSource) {
-      this.eventSource.close();
-    }
+    // Não precisa criar session_id - será obtido via streaming
 
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',

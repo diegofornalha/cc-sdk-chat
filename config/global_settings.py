@@ -15,8 +15,8 @@ from dataclasses import dataclass, asdict
 class GlobalSettings:
     """Configurações globais do usuário."""
     language: str = "pt-br"
-    api_endpoint: str = "http://localhost:8990"
-    frontend_endpoint: str = "http://localhost:3040"
+    api_endpoint: str = "http://localhost:8992"
+    frontend_endpoint: str = "http://localhost:3082"
     auto_save_sessions: bool = True
     max_sessions_history: int = 100
     default_system_prompt: str = ""
@@ -122,8 +122,8 @@ class GlobalSettingsManager:
 
 ## Configurações Padrão
 - Responder sempre em português brasileiro
-- Backend na porta 8990
-- Frontend na porta 3040
+- Backend na porta 8992
+- Frontend na porta 3082
 - Focar em consolidação, não criar coisas novas
 - Não criar arquivos na raiz sem autorização
 

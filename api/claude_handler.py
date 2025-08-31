@@ -10,7 +10,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 
 # Adiciona o diretório do SDK ao path  
-sdk_dir = '/app/claude-code-sdk-python'
+sdk_dir = os.path.join(os.path.dirname(__file__), 'claude-code-sdk-python')
 sys.path.insert(0, sdk_dir)
 
 from src import (

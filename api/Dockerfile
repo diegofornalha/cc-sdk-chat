@@ -81,14 +81,14 @@ ENV CLAUDE_DISABLE_TELEMETRY=1
 # Variáveis da aplicação
 ENV PYTHONUNBUFFERED=1
 ENV LOG_LEVEL=INFO
-ENV PORT=8990
+ENV PORT=8992
 
 # Expõe porta da API
-EXPOSE 8990
+EXPOSE 8992
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8990/ || exit 1
+    CMD curl -f http://localhost:8992/ || exit 1
 
 # Comando para iniciar a aplicação
 CMD ["python3", "-u", "server.py"]

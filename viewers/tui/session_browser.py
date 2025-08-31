@@ -174,7 +174,7 @@ class SessionBrowser:
         # Global context
         global_node = context_tree.add("🌍 Global (~/.claude/CLAUDE.md)")
         global_node.add("responda sempre em pt br")
-        global_node.add("backend sempre 8990, frontend sempre 3040")
+        global_node.add("backend sempre 8992, frontend sempre 3082")
         
         # Project context  
         project_node = context_tree.add("📁 Projeto (CLAUDE.md)")

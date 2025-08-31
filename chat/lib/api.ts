@@ -14,7 +14,7 @@ export interface ChatMessage {
 }
 
 export interface StreamResponse {
-    type: 'text_chunk' | 'assistant_text' | 'tool_use' | 'tool_result' | 'result' | 'error' | 'done';
+    type: 'text_chunk' | 'tool_use' | 'tool_result' | 'result' | 'error' | 'done' | 'processing' | 'session_migrated';
     content?: string;
     tool?: string;
     id?: string;
@@ -29,7 +29,6 @@ export interface StreamResponse {
 class ChatAPI {
     private baseUrl: string;
     private sessionId: string | null = null;
-    private eventSource: EventSource | null = null;
 
     constructor(baseUrl?: string) {
         // Detecta automaticamente a URL baseado no ambiente
@@ -43,30 +42,14 @@ class ChatAPI {
                 this.baseUrl = '';
             } else {
                 // Em desenvolvimento, usa localhost
-                this.baseUrl = 'http://localhost:8989';
+                this.baseUrl = 'http://localhost:8992';
             }
         } else {
             // SSR ou ambiente Node.js
-            this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8989';
+            this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8992';
         }
     }
 
-    async createSession(): Promise<string> {
-        const response = await fetch(`${this.baseUrl}/api/new-session`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to create session');
-        }
-
-        const data = await response.json();
-        this.sessionId = data.session_id;
-        return data.session_id;
-    }
 
     async sendMessage(
         message: string,
@@ -74,14 +57,7 @@ class ChatAPI {
         onError?: (error: string) => void,
         onComplete?: () => void
     ): Promise<void> {
-        if (!this.sessionId) {
-            this.sessionId = await this.createSession();
-        }
-
-        // Fecha EventSource anterior se existir
-        if (this.eventSource) {
-            this.eventSource.close();
-        }
+        // Usa session_id real obtido via streaming
 
         const response = await fetch(`${this.baseUrl}/api/chat`, {
             method: 'POST',
@@ -90,7 +66,7 @@ class ChatAPI {
             },
             body: JSON.stringify({
                 message,
-                session_id: this.sessionId,
+                session_id: this.sessionId, // null na primeira mensagem
             }),
         });
 
@@ -134,6 +110,11 @@ class ChatAPI {
                             
                             if (data.type === 'error' && onError) {
                                 onError(data.error || 'Unknown error');
+                            } else if (data.type === 'session_migrated') {
+                                // Captura session_id real do Claude Code SDK
+                                console.log(`✅ Session ID real recebido: ${data.session_id}`);
+                                this.sessionId = data.session_id;
+                                onStream(data);
                             } else if (data.type === 'done') {
                                 // Marca como completo e chama callback
                                 if (onComplete && !completeCalled) {

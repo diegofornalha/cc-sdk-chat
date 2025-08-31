@@ -84,35 +84,8 @@ const useChatStore = create<ChatStore>()(
     streamingContent: '',
     
     createSession: (config = {}) => {
-      // ✅ CORREÇÃO: Apenas cria sessão local temporária SEM placeholder
-      // O SDK gerará o session_id real na primeira mensagem
-      const tempSessionId = `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`
-      const newSession: Session = {
-        id: tempSessionId,
-        title: '💬 Nova conversa',
-        messages: [],
-        config: {
-          systemPrompt: config.systemPrompt || 'Nova conversa Claude Code',
-          allowedTools: config.allowedTools || [],
-          maxTurns: config.maxTurns || 50,
-          permissionMode: config.permissionMode || 'acceptEdits',
-          cwd: config.cwd || undefined
-        },
-        metrics: {
-          totalTokens: 0,
-          totalCost: 0,
-          messageCount: 0
-        },
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-      
-      set((state) => {
-        state.sessions.set(tempSessionId, newSession)
-        state.activeSessionId = tempSessionId
-      })
-      
-      return tempSessionId
+      // Não cria mais sessões temporárias - retorna placeholder
+      return null
     },
     
     deleteSession: (sessionId) => {

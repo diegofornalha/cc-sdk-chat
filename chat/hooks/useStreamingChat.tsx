@@ -1,4 +1,4 @@
-import { useReducer, useRef, useCallback } from 'react';
+import { useReducer, useRef, useCallback, useEffect } from 'react';
 import ChatAPI, { ChatMessage, StreamResponse } from '../lib/api';
 
 // Estados da aplicação
@@ -9,6 +9,9 @@ interface ChatState {
     sessionId: string | null;
     tokenInfo: { input?: number; output?: number } | null;
     costInfo: number | null;
+    isProcessing: boolean;
+    typingQueue: string[];
+    isTyping: boolean;
 }
 
 // Ações possíveis
@@ -16,8 +19,13 @@ type ChatAction =
     | { type: 'SET_SESSION'; sessionId: string }
     | { type: 'ADD_MESSAGE'; message: ChatMessage }
     | { type: 'START_STREAMING' }
+    | { type: 'START_PROCESSING' }
+    | { type: 'STOP_PROCESSING' }
     | { type: 'UPDATE_STREAM_CONTENT'; content: string }
     | { type: 'APPEND_STREAM_CONTENT'; content: string }
+    | { type: 'ADD_TO_TYPING_QUEUE'; content: string }
+    | { type: 'START_TYPING' }
+    | { type: 'STOP_TYPING' }
     | { type: 'UPDATE_TOKEN_INFO'; tokens: { input?: number; output?: number } }
     | { type: 'UPDATE_COST_INFO'; cost: number }
     | { type: 'FINISH_STREAMING'; message?: ChatMessage }
@@ -39,8 +47,28 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 isStreaming: true,
                 currentStreamContent: '',
                 tokenInfo: null,
-                costInfo: null
+                costInfo: null,
+                typingQueue: [],
+                isTyping: false
             };
+            
+        case 'START_PROCESSING':
+            return { ...state, isProcessing: true };
+            
+        case 'STOP_PROCESSING':
+            return { ...state, isProcessing: false };
+            
+        case 'ADD_TO_TYPING_QUEUE':
+            return {
+                ...state,
+                typingQueue: [...state.typingQueue, action.content]
+            };
+            
+        case 'START_TYPING':
+            return { ...state, isTyping: true };
+            
+        case 'STOP_TYPING':
+            return { ...state, isTyping: false };
             
         case 'UPDATE_STREAM_CONTENT':
             return { ...state, currentStreamContent: action.content };
@@ -60,7 +88,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 isStreaming: false,
                 currentStreamContent: '',
                 tokenInfo: null,
-                costInfo: null
+                costInfo: null,
+                isProcessing: false,
+                typingQueue: [],
+                isTyping: false
             };
             
             if (action.message) {
@@ -76,13 +107,19 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
                 currentStreamContent: '',
                 isStreaming: false,
                 tokenInfo: null,
-                costInfo: null
+                costInfo: null,
+                isProcessing: false,
+                typingQueue: [],
+                isTyping: false
             };
             
         case 'INTERRUPT_STREAMING':
             return {
                 ...state,
-                isStreaming: false
+                isStreaming: false,
+                isProcessing: false,
+                isTyping: false,
+                typingQueue: []
             };
             
         default:
@@ -98,25 +135,103 @@ export function useStreamingChat() {
         currentStreamContent: '',
         sessionId: null,
         tokenInfo: null,
-        costInfo: null
+        costInfo: null,
+        isProcessing: false,
+        typingQueue: [],
+        isTyping: false
     });
     
     const apiRef = useRef<ChatAPI | null>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const typingQueueRef = useRef<string[]>([]);
     
     // Inicializa API
     const initializeAPI = useCallback(async () => {
         if (!apiRef.current) {
             apiRef.current = new ChatAPI();
-            const sessionId = await apiRef.current.createSession();
-            dispatch({ type: 'SET_SESSION', sessionId });
         }
+    }, []);
+
+    // Hook de efeito de digitação
+    const processTypingQueue = useCallback(() => {
+        if (typingQueueRef.current.length === 0) {
+            dispatch({ type: 'STOP_TYPING' });
+            return;
+        }
+
+        dispatch({ type: 'START_TYPING' });
+        const chunk = typingQueueRef.current.shift()!;
+        const words = chunk.split(/(\s+)/);
+        
+        let wordIndex = 0;
+        
+        const typeNextWord = () => {
+            if (wordIndex >= words.length) {
+                // Terminou este chunk, processa próximo
+                processTypingQueue();
+                return;
+            }
+
+            const word = words[wordIndex];
+            dispatch({ type: 'APPEND_STREAM_CONTENT', content: word });
+            wordIndex++;
+
+            // Calcula delay baseado no tipo de palavra
+            let delay = Math.random() * 40 + 80; // 80-120ms base
+            
+            // Palavras técnicas/longas têm delay maior
+            if (word.length > 8 || /[{}()\[\]<>]/.test(word)) {
+                delay += 50;
+            }
+            
+            // Pontuação tem pausa maior
+            if (/[.!?:;]/.test(word)) {
+                delay += 200;
+            }
+            
+            // Espaços em branco são processados mais rapidamente
+            if (/^\s+$/.test(word)) {
+                delay = 20; // Espaços são "digitados" muito rapidamente
+            }
+            
+            // Code blocks têm ritmo diferente
+            if (word.includes('```') || word.includes('`')) {
+                delay += 100; // Pausa antes/depois de code blocks
+            }
+
+            typingTimeoutRef.current = setTimeout(typeNextWord, delay);
+        };
+
+        typeNextWord();
+    }, []);
+
+    // Adiciona chunk à fila de digitação
+    const addToTypingQueue = useCallback((content: string) => {
+        typingQueueRef.current.push(content);
+        
+        // Se não está digitando, inicia processo
+        if (!state.isTyping && typingQueueRef.current.length === 1) {
+            processTypingQueue();
+        }
+    }, [state.isTyping, processTypingQueue]);
+
+    // Limpa fila de digitação (para interrupções)
+    const clearTypingQueue = useCallback(() => {
+        typingQueueRef.current = [];
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = null;
+        }
+        dispatch({ type: 'STOP_TYPING' });
     }, []);
     
     
-    // Envia mensagem com streaming otimizado - sem debounce
+    // Envia mensagem com streaming e efeito de digitação
     const sendMessage = useCallback(async (message: string) => {
         if (!apiRef.current) return;
-        // Removido bloqueio - permite enviar múltiplas mensagens mesmo durante streaming
+        
+        // Limpa qualquer digitação em andamento
+        clearTypingQueue();
         
         // Adiciona mensagem do usuário
         const userMessage: ChatMessage = {
@@ -127,23 +242,41 @@ export function useStreamingChat() {
         
         dispatch({ type: 'ADD_MESSAGE', message: userMessage });
         dispatch({ type: 'START_STREAMING' });
+        dispatch({ type: 'START_PROCESSING' });
         
         let finalContent = '';
         let finalTokens: { input?: number; output?: number } | null = null;
         let finalCost: number | null = null;
+        let isFirstTextChunk = true;
         
         try {
             await apiRef.current.sendMessage(
                 message,
                 (data: StreamResponse) => {
-                    if (data.type === 'text_chunk') {
-                        // Atualiza diretamente sem buffer ou timeout
-                        dispatch({ type: 'APPEND_STREAM_CONTENT', content: data.content || '' });
-                        finalContent += data.content || '';
+                    if (data.type === 'session_migrated') {
+                        console.log(`✅ Session ID: ${data.session_id}`);
+                        dispatch({ type: 'SET_SESSION', sessionId: data.session_id });
+                        
+                    } else if (data.type === 'processing') {
+                        // Mantém indicador "Processando..." ativo
+                        dispatch({ type: 'START_PROCESSING' });
+                        
+                    } else if (data.type === 'text_chunk') {
+                        // Para o indicador "Processando..." no primeiro chunk de texto
+                        if (isFirstTextChunk) {
+                            dispatch({ type: 'STOP_PROCESSING' });
+                            isFirstTextChunk = false;
+                        }
+                        
+                        // Adiciona à fila de digitação em vez de mostrar direto
+                        if (data.content) {
+                            addToTypingQueue(data.content);
+                            finalContent += data.content;
+                        }
                         
                     } else if (data.type === 'tool_use') {
                         const toolMsg = `\n📦 Usando ferramenta: ${data.tool}\n`;
-                        dispatch({ type: 'APPEND_STREAM_CONTENT', content: toolMsg });
+                        addToTypingQueue(toolMsg);
                         finalContent += toolMsg;
                         
                     } else if (data.type === 'result') {
@@ -161,36 +294,54 @@ export function useStreamingChat() {
                     }
                 },
                 (error: string) => {
+                    dispatch({ type: 'STOP_PROCESSING' });
                     const errorMsg = `\n❌ Erro: ${error}`;
-                    dispatch({ type: 'APPEND_STREAM_CONTENT', content: errorMsg });
+                    addToTypingQueue(errorMsg);
                     finalContent += errorMsg;
                 },
                 () => {
-                    // Adiciona mensagem final
-                    if (finalContent) {
-                        const assistantMessage: ChatMessage = {
-                            role: 'assistant',
-                            content: finalContent,
-                            timestamp: new Date(),
-                            tokens: finalTokens || undefined,
-                            cost: finalCost || undefined
-                        };
+                    dispatch({ type: 'STOP_PROCESSING' });
+                    
+                    // Aguarda digitação terminar antes de finalizar
+                    const waitForTypingToFinish = () => {
+                        if (state.isTyping || typingQueueRef.current.length > 0) {
+                            setTimeout(waitForTypingToFinish, 100);
+                            return;
+                        }
                         
-                        dispatch({ type: 'FINISH_STREAMING', message: assistantMessage });
-                    } else {
-                        dispatch({ type: 'FINISH_STREAMING' });
-                    }
+                        // Adiciona mensagem final
+                        if (finalContent) {
+                            const assistantMessage: ChatMessage = {
+                                role: 'assistant',
+                                content: finalContent,
+                                timestamp: new Date(),
+                                tokens: finalTokens || undefined,
+                                cost: finalCost || undefined
+                            };
+                            
+                            dispatch({ type: 'FINISH_STREAMING', message: assistantMessage });
+                        } else {
+                            dispatch({ type: 'FINISH_STREAMING' });
+                        }
+                    };
+                    
+                    waitForTypingToFinish();
                 }
             );
         } catch (error) {
             console.error('Error sending message:', error);
+            dispatch({ type: 'STOP_PROCESSING' });
+            clearTypingQueue();
             dispatch({ type: 'FINISH_STREAMING' });
         }
-    }, []); // Removido flushBuffer das dependências
+    }, [clearTypingQueue, addToTypingQueue, state.isTyping]);
     
     // Limpa sessão
     const clearSession = useCallback(async () => {
         if (!apiRef.current) return; // Permite limpar a qualquer momento
+        
+        // Limpa fila de digitação
+        clearTypingQueue();
         
         try {
             await apiRef.current.clearSession();
@@ -198,11 +349,14 @@ export function useStreamingChat() {
         } catch (error) {
             console.error('Error clearing session:', error);
         }
-    }, []); // Removido state.isStreaming - permite limpar a qualquer momento
+    }, [clearTypingQueue]);
     
     // Interrompe streaming
     const interruptStreaming = useCallback(async () => {
         if (!apiRef.current || !state.isStreaming) return;
+        
+        // Limpa fila de digitação imediatamente
+        clearTypingQueue();
         
         try {
             await apiRef.current.interruptSession();
@@ -221,10 +375,13 @@ export function useStreamingChat() {
         } catch (error) {
             console.error('Error interrupting session:', error);
         }
-    }, [state.isStreaming, state.currentStreamContent]);
+    }, [state.isStreaming, state.currentStreamContent, clearTypingQueue]);
     
     // Cleanup
     const cleanup = useCallback(async () => {
+        // Limpa fila de digitação
+        clearTypingQueue();
+        
         if (apiRef.current && state.sessionId) {
             try {
                 await apiRef.current.deleteSession();
@@ -233,7 +390,14 @@ export function useStreamingChat() {
             }
             apiRef.current = null;
         }
-    }, [state.sessionId]);
+    }, [state.sessionId, clearTypingQueue]);
+
+    // Cleanup automático na desmontagem
+    useEffect(() => {
+        return () => {
+            clearTypingQueue();
+        };
+    }, [clearTypingQueue]);
     
     return {
         // Estado

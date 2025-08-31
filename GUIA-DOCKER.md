@@ -14,8 +14,8 @@
 Esta documentação descreve a configuração completa do **Claude Code SDK Chat** em containers Docker, com bypass de permissões e execução automatizada.
 
 ### Características Principais:
-- ✅ **API Backend**: FastAPI com Claude Code SDK (porta 8990)
-- ✅ **Frontend**: Next.js com chat em tempo real (porta 3040)
+- ✅ **API Backend**: FastAPI com Claude Code SDK (porta 8992)
+- ✅ **Frontend**: Next.js com chat em tempo real (porta 3082)
 - ✅ **Usuário não-root** (appuser - UID 1002)
 - ✅ **Bypass completo de permissões Claude Code**
 - ✅ **Sem prompts de confirmação**
@@ -30,12 +30,12 @@ Esta documentação descreve a configuração completa do **Claude Code SDK Chat
 ┌─────────────────────────────────────┐
 │         Claude Code Chat           │
 ├─────────────────────────────────────┤
-│  🚀 API Backend (8990)             │
+│  🚀 API Backend (8992)             │
 │  - FastAPI + Claude Code SDK       │
 │  - Python 3.11                     │
 │  - Usuário: appuser (1002)         │
 │                                     │
-│  🌐 Frontend (3040)                │
+│  🌐 Frontend (3082)                │
 │  - Next.js                         │
 │  - Usuário: appuser (1002)         │
 │                                     │
@@ -77,8 +77,8 @@ RUN useradd -m -u 1002 -s /bin/bash appuser
 # Configurações Claude Code
 RUN echo '{"permissions":{"allow":["*"]}}' > /home/appuser/.claude/settings.local.json
 
-# Porta 8990
-EXPOSE 8990
+# Porta 8992
+EXPOSE 8992
 ```
 
 #### Frontend (chat/Dockerfile)
@@ -92,8 +92,8 @@ RUN npm ci && npm run build
 # Usuário não-root
 USER nextjs
 
-# Porta 3040
-EXPOSE 3040
+# Porta 3082
+EXPOSE 3082
 ```
 
 ### 4. Docker Compose Configuração
@@ -104,7 +104,7 @@ version: '3.8'
 services:
   api:
     build: ./api
-    ports: ["8990:8990"]
+    ports: ["8992:8992"]
     environment:
       - CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=true
       - CLAUDE_AUTO_APPROVE=true
@@ -115,9 +115,9 @@ services:
     
   frontend:
     build: ./chat
-    ports: ["3040:3040"]
+    ports: ["3082:3082"]
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8990
+      - NEXT_PUBLIC_API_URL=http://api:8992
     depends_on: [api]
 ```
 
@@ -156,7 +156,7 @@ services:
 ### Comunicação Entre Containers
 
 ```
-Frontend (3040) ──HTTP──▶ API (8990) ──Claude SDK──▶ Anthropic
+Frontend (3082) ──HTTP──▶ API (8992) ──Claude SDK──▶ Anthropic
      │                       │
      │                       ├── Sessions Storage
      │                       └── Logs
@@ -232,10 +232,10 @@ docker compose ps
 
 | Serviço | URL | Descrição |
 |---------|-----|-----------|
-| Frontend | http://localhost:3040 | Interface do chat |
-| API | http://localhost:8990 | Backend API |
-| API Docs | http://localhost:8990/docs | Documentação Swagger |
-| Healthcheck | http://localhost:8990/ | Status da API |
+| Frontend | http://localhost:3082 | Interface do chat |
+| API | http://localhost:8992 | Backend API |
+| API Docs | http://localhost:8992/docs | Documentação Swagger |
+| Healthcheck | http://localhost:8992/ | Status da API |
 
 ### Usando Claude Code no Container
 
@@ -277,8 +277,8 @@ docker exec cc-sdk-api claude-bypass "gere documentação para a API baseada no 
 docker compose ps
 
 # Teste manual de endpoints
-curl http://localhost:8990/
-curl http://localhost:3040/
+curl http://localhost:8992/
+curl http://localhost:3082/
 
 # Logs de healthcheck
 docker inspect cc-sdk-api | jq '.[0].State.Health'
@@ -296,11 +296,11 @@ docker ps --filter name=cc-sdk --format "table {{.Names}}\t{{.Status}}\t{{.Ports
 
 # 2. Testar API
 echo -e "\n2. Testando API:"
-curl -s http://localhost:8990/ | jq .
+curl -s http://localhost:8992/ | jq .
 
 # 3. Testar criação de sessão
 echo -e "\n3. Testando nova sessão:"
-SESSION=$(curl -s -X POST http://localhost:8990/api/new-session | jq -r '.session_id')
+SESSION=$(curl -s -X POST http://localhost:8992/api/new-session | jq -r '.session_id')
 echo "Session ID: $SESSION"
 
 # 4. Testar Claude Bypass
@@ -309,7 +309,7 @@ docker exec cc-sdk-api claude-bypass --version
 
 # 5. Testar Frontend
 echo -e "\n5. Testando Frontend:"
-curl -s http://localhost:3040/ | head -n 5
+curl -s http://localhost:3082/ | head -n 5
 
 echo -e "\n=== Testes concluídos ==="
 ```
@@ -386,10 +386,10 @@ docker compose up --build --force-recreate
 **Solução**: Verificar NEXT_PUBLIC_API_URL:
 ```bash
 # Para desenvolvimento local
-NEXT_PUBLIC_API_URL=http://localhost:8990
+NEXT_PUBLIC_API_URL=http://localhost:8992
 
 # Para containers Docker
-NEXT_PUBLIC_API_URL=http://api:8990
+NEXT_PUBLIC_API_URL=http://api:8992
 ```
 
 ## 📁 Scripts Auxiliares
@@ -496,13 +496,13 @@ echo "✅ Backup salvo em: $BACKUP_DIR"
 ## ✅ Checklist de Verificação
 
 - [ ] Docker e Docker Compose instalados
-- [ ] Portas 8990 e 3040 disponíveis
+- [ ] Portas 8992 e 3082 disponíveis
 - [ ] Arquivo .env.docker configurado
 - [ ] Claude Code API Key configurada (se necessário)
 - [ ] Containers construídos com sucesso
 - [ ] Health checks passando
-- [ ] API respondendo em localhost:8990
-- [ ] Frontend carregando em localhost:3040
+- [ ] API respondendo em localhost:8992
+- [ ] Frontend carregando em localhost:3082
 - [ ] Bypass do Claude funcionando
 - [ ] Comunicação entre containers OK
 

@@ -161,7 +161,7 @@
             try {
                 // 1. Criar nova sessão
                 log('Criando nova sessão...', 'info');
-                const newSessionResponse = await fetch('http://localhost:8990/api/new-session', {
+                const newSessionResponse = await fetch('http://localhost:8992/api/new-session', {
                     method: 'POST'
                 });
                 const sessionData = await newSessionResponse.json();
@@ -173,7 +173,7 @@
                 
                 // 2. Enviar mensagem
                 log('Enviando mensagem de teste...', 'info');
-                const response = await fetch('http://localhost:8990/api/chat', {
+                const response = await fetch('http://localhost:8992/api/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -239,7 +239,7 @@
                 // 3. Validar sessão
                 if (realSessionId) {
                     log('Validando sessão real...', 'info');
-                    const validateResponse = await fetch(`http://localhost:8990/api/validate-session/${realSessionId}`);
+                    const validateResponse = await fetch(`http://localhost:8992/api/validate-session/${realSessionId}`);
                     const validation = await validateResponse.json();
                     
                     if (validation.valid) {
@@ -262,7 +262,7 @@
         function openChat() {
             if (realSessionId) {
                 const projectPath = '-home-suthub--claude-api-claude-code-app-cc-sdk-chat';
-                const url = `http://localhost:3040/${projectPath}/${realSessionId}`;
+                const url = `http://localhost:3082/${projectPath}/${realSessionId}`;
                 log(`Abrindo chat com sessão real: ${url}`, 'info');
                 window.open(url, '_blank');
             }

@@ -1,15 +1,18 @@
 import React, { useEffect, useRef } from 'react';
 import { StreamingMarkdownRenderer } from '../StreamingMarkdownRenderer';
+import { ProcessingIndicator } from './ProcessingIndicator';
 
 interface StreamingMessageProps {
     content: string;
     isStreaming?: boolean;
+    isProcessing?: boolean;
     role: 'user' | 'assistant' | 'system';
 }
 
 export const StreamingMessage: React.FC<StreamingMessageProps> = ({
     content,
     isStreaming = false,
+    isProcessing = false,
     role
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -98,9 +101,15 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
                 {role === 'user' ? (
                     <div ref={userContainerRef} className="user-message"></div>
                 ) : (
-                    <div ref={containerRef} className="assistant-message notion-content" />
+                    <>
+                        {isProcessing && !content ? (
+                            <ProcessingIndicator message="Processando Resposta..." />
+                        ) : (
+                            <div ref={containerRef} className="assistant-message notion-content" />
+                        )}
+                    </>
                 )}
-                {isStreaming && role === 'assistant' && (
+                {isStreaming && role === 'assistant' && !isProcessing && content && (
                     <span className="streaming-indicator">
                         <span className="dot"></span>
                         <span className="dot"></span>

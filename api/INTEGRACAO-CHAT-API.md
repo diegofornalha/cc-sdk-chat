@@ -36,14 +36,14 @@ pip3 install --break-system-packages -e claude-code-sdk-python
 
 ### 2. Configuração da API Backend
 
-#### Mudança de porta (8989 → 8990)
-Como a porta 8989 estava ocupada, alteramos para 8990:
+#### Mudança de porta (8989 → 8992)
+Como a porta 8989 estava ocupada, alteramos para 8992:
 
 **Arquivo:** `/home/suthub/.claude/cc-sdk-chat/api/server.py` (linha 532-534)
 ```python
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8990, reload=False)
+    uvicorn.run(app, host="127.0.0.1", port=8992, reload=False)
 ```
 
 #### Configuração de CORS
@@ -54,9 +54,9 @@ Adicionamos suporte para localhost e 127.0.0.1:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3040", 
+        "http://localhost:3082", 
         "http://localhost:3000",
-        "http://127.0.0.1:3040",  # Adicionado
+        "http://127.0.0.1:3082",  # Adicionado
         "https://suthub.agentesintegrados.com",
         "http://suthub.agentesintegrados.com"
     ],
@@ -74,10 +74,10 @@ Mudamos a URL base para conectar na nova porta:
 **Arquivo:** `/home/suthub/.claude/cc-sdk-chat/chat/src/lib/api.ts` (linhas 45-46 e 50)
 ```typescript
 // Em desenvolvimento, usa localhost
-this.baseUrl = 'http://localhost:8990';
+this.baseUrl = 'http://localhost:8992';
 
 // SSR ou ambiente Node.js
-this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8990';
+this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8992';
 ```
 
 ### 4. Comandos de Execução
@@ -98,7 +98,7 @@ npm run dev
 
 #### Verificar criação de sessão:
 ```bash
-curl -X POST http://localhost:8990/api/new-session
+curl -X POST http://localhost:8992/api/new-session
 ```
 Resposta esperada:
 ```json
@@ -108,18 +108,18 @@ Resposta esperada:
 ## Estrutura Final
 
 ### Serviços em Execução:
-- **Frontend Next.js:** http://localhost:3040
-- **Backend FastAPI:** http://localhost:8990
+- **Frontend Next.js:** http://localhost:3082
+- **Backend FastAPI:** http://localhost:8992
 
 ### Fluxo de Comunicação:
-1. Usuário acessa http://localhost:3040
-2. Frontend envia requisições para http://localhost:8990/api/
+1. Usuário acessa http://localhost:3082
+2. Frontend envia requisições para http://localhost:8992/api/
 3. API processa com Claude Code SDK
 4. Respostas retornam via SSE (Server-Sent Events)
 
 ## Problemas Resolvidos
 
-1. ✅ **Porta ocupada:** Mudança de 8989 para 8990
+1. ✅ **Porta ocupada:** Mudança de 8989 para 8992
 2. ✅ **CORS:** Adição de origens permitidas
 3. ✅ **Dependências:** Instalação correta do Claude Code SDK
 4. ✅ **Ambiente virtual:** Uso do venv correto
@@ -166,10 +166,10 @@ pkill -f "next dev"
 ### Logs e monitoramento:
 ```bash
 # Ver output da API
-curl http://localhost:8990/
+curl http://localhost:8992/
 
 # Testar chat
-curl -X POST http://localhost:8990/api/chat \
+curl -X POST http://localhost:8992/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "teste", "session_id": "test-123"}'
 ```
@@ -191,13 +191,13 @@ Criamos um cliente API que conecta o Streamlit à mesma API FastAPI usada pelo f
 class ClaudeChatAPIClient:
     """Cliente para comunicação com a API Claude Chat"""
     
-    def __init__(self, api_url: str = "http://localhost:8990"):
+    def __init__(self, api_url: str = "http://localhost:8992"):
         self.api_url = api_url.rstrip("/")
         self.session_id: Optional[str] = None
         
     def simple_query(self, message: str) -> Dict:
         """Envia mensagem e retorna resposta completa (não streaming)"""
-        # Conecta com API FastAPI na porta 8990
+        # Conecta com API FastAPI na porta 8992
         # Retorna resultado compatível com sistema anterior
 ```
 
@@ -222,13 +222,13 @@ pip install --break-system-packages sseclient-py requests
 ### Estrutura Final Atualizada
 
 ### Serviços em Execução:
-- **Frontend Next.js:** http://localhost:3040
-- **Backend FastAPI:** http://localhost:8990  
+- **Frontend Next.js:** http://localhost:3082
+- **Backend FastAPI:** http://localhost:8992  
 - **Streamlit Chat:** http://localhost:40047 ⭐ (NOVO)
 
 ### Fluxo de Comunicação Unificado:
-1. **Next.js Frontend:** http://localhost:3040 → API http://localhost:8990
-2. **Streamlit Chat:** http://localhost:40047 → API http://localhost:8990 ⭐
+1. **Next.js Frontend:** http://localhost:3082 → API http://localhost:8992
+2. **Streamlit Chat:** http://localhost:40047 → API http://localhost:8992 ⭐
 3. Ambos usam a mesma API FastAPI com Claude Code SDK
 4. Respostas processadas de forma unificada
 
@@ -240,7 +240,7 @@ pip install --break-system-packages sseclient-py requests
 
 ## Problemas Resolvidos (ATUALIZADO)
 
-1. ✅ **Porta ocupada:** Mudança de 8989 para 8990
+1. ✅ **Porta ocupada:** Mudança de 8989 para 8992
 2. ✅ **CORS:** Adição de origens permitidas
 3. ✅ **Dependências:** Instalação correta do Claude Code SDK
 4. ✅ **Ambiente virtual:** Uso do venv correto
@@ -282,8 +282,8 @@ Atualmente, o Streamlit mostra métricas zeradas (Tokens: 0↑ 0↓ | Custo: $0.
 ## Conclusão
 
 A integração foi expandida com sucesso para incluir:
-1. Frontend Next.js profissional (http://localhost:3040)
-2. API FastAPI robusta (http://localhost:8990)
+1. Frontend Next.js profissional (http://localhost:3082)
+2. API FastAPI robusta (http://localhost:8992)
 3. **Interface Streamlit simplificada (http://localhost:40047) ⭐**
 
 Todas as interfaces compartilham a mesma API backend, garantindo comportamento consistente e facilitando manutenção. O sistema está funcional e pronto para uso em ambiente de desenvolvimento com múltiplas opções de interface.

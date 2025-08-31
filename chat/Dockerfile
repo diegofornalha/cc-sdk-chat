@@ -62,16 +62,16 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
 
-# Expor porta 3040 conforme especificado
-EXPOSE 3040
+# Expor porta 3082 conforme especificado
+EXPOSE 3082
 
 # Configurar variáveis de ambiente
-ENV PORT 3040
+ENV PORT 3082
 ENV HOSTNAME "0.0.0.0"
 
 # Healthcheck para verificar se a aplicação está respondendo
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3040/ || exit 1
+  CMD curl -f http://localhost:3082/ || exit 1
 
 # Instalar curl para healthcheck
 USER root

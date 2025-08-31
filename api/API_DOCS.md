@@ -406,7 +406,7 @@ print(f"Custo total: ${total_cost:.4f}")
 ### Configuração de CORS
 
 A API está configurada para aceitar requisições de:
-- `http://localhost:3040`
+- `http://localhost:3082`
 - `http://localhost:3000`
 
 Para produção, ajuste em `server.py`:

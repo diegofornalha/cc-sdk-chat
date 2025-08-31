@@ -79,9 +79,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3040", 
+        "http://localhost:3082", 
         "http://localhost:3000",
-        "http://127.0.0.1:3040",
+        "http://127.0.0.1:3082",
         "https://suthub.agentesintegrados.com",
         "http://suthub.agentesintegrados.com"
     ],
@@ -228,31 +228,32 @@ async def root() -> HealthResponse:
 async def send_message(chat_message: ChatMessage) -> StreamingResponse:
     """Envia mensagem para Claude e retorna resposta em streaming."""
     
-    # Gera session_id se não fornecido
-    session_id = chat_message.session_id or str(uuid.uuid4())
-    
-    # Valida e migra session_id se necessário
-    validated_session_id, was_migrated = session_validator.validate_and_migrate_session(session_id)
+    # Se não há session_id, deixa None para Claude SDK criar
+    session_id = chat_message.session_id
     
     async def generate():
         """Gera stream SSE."""
+        # Inicializa real_session_id no escopo da função
+        real_session_id = session_id
+        
         try:
-            # Se foi migrado, envia evento informando
-            if was_migrated:
-                migration_data = json.dumps({
-                    "type": "session_migrated",
-                    "original_session_id": session_id,
-                    "session_id": validated_session_id,
-                    "migrated": True
-                })
-                yield f"data: {migration_data}\n\n"
-            
             async for response in claude_handler.send_message(
-                validated_session_id, 
+                session_id, 
                 chat_message.message
             ):
-                # Adiciona session_id validado em todas as respostas
-                response["session_id"] = validated_session_id
+                # Captura session_id real quando disponível
+                if "session_id" in response:
+                    real_session_id = response["session_id"]
+                    
+                # Se é primeira mensagem sem session_id, envia evento de nova sessão
+                if not session_id and real_session_id and real_session_id != session_id:
+                    migration_data = json.dumps({
+                        "type": "session_migrated",
+                        "session_id": real_session_id,
+                        "migrated": False  # Nova sessão, não migração
+                    })
+                    yield f"data: {migration_data}\n\n"
+                
                 # Formato SSE
                 data = json.dumps(response)
                 yield f"data: {data}\n\n"
@@ -261,18 +262,15 @@ async def send_message(chat_message: ChatMessage) -> StreamingResponse:
             error_data = json.dumps({
                 "type": "error",
                 "error": str(e),
-                "session_id": validated_session_id
+                "session_id": real_session_id or "unknown"
             })
             yield f"data: {error_data}\n\n"
         finally:
-            # Envia evento de fim com session_id validado
+            # Envia evento de fim com session_id real
             final_data = {
                 'type': 'done', 
-                'session_id': validated_session_id
+                'session_id': real_session_id or "unknown"
             }
-            if was_migrated:
-                final_data['migrated'] = True
-                final_data['original_session_id'] = session_id
             yield f"data: {json.dumps(final_data)}\n\n"
     
     return StreamingResponse(
@@ -281,8 +279,7 @@ async def send_message(chat_message: ChatMessage) -> StreamingResponse:
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Session-ID": validated_session_id,
-            "X-Was-Migrated": str(was_migrated).lower()
+            "X-Session-ID": session_id or "pending"
         }
     )
 
@@ -345,31 +342,6 @@ async def clear_session(action: SessionAction) -> StatusResponse:
     await claude_handler.clear_session(action.session_id)
     return StatusResponse(status="cleared", session_id=action.session_id)
 
-@app.post(
-    "/api/new-session",
-    tags=["Sessões"],
-    summary="Criar Nova Sessão",
-    description="""Cria uma nova sessão de chat sincronizada com Claude Code SDK.
-    
-    Retorna o ID real da sessão Claude Code ativa para sincronização completa.
-    """,
-    response_description="ID da nova sessão criada",
-    responses={
-        200: {
-            "description": "Sessão criada com sucesso",
-            "content": {
-                "application/json": {
-                    "example": {"session_id": "70fcbdbd-4e34-4770-be69-d85c76ba7c8b", "claude_session_id": "70fcbdbd-4e34-4770-be69-d85c76ba7c8b"}
-                }
-            }
-        }
-    }
-)
-async def create_new_session():
-    """Cria uma nova sessão simples."""
-    session_id = str(uuid.uuid4())
-    await claude_handler.create_session(session_id)
-    return {"session_id": session_id}
 
 @app.delete(
     "/api/session/{session_id}",

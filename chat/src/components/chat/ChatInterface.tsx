@@ -85,67 +85,11 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     }
   }, [sessionData, loadExternalSession, loadCrossSessionHistory])
 
-  // 🔥 INICIALIZAÇÃO INTELIGENTE: Busca sessões reais antes de criar temporárias
+  // 🚀 AGUARDA PRIMEIRA MENSAGEM: Não cria sessões temporárias
   React.useEffect(() => {
     if (sessions.size === 0 && !sessionData) {
-      console.log('🔍 Verificando sessões reais disponíveis antes de criar nova...');
-      
-      // Primeiro verifica se há sessões reais no sistema
-      fetch('/api/real-sessions')
-        .then(response => response.json())
-        .then(result => {
-          const realSessions = result.sessions || []
-          console.log(`📋 Encontradas ${realSessions.length} sessões reais:`, realSessions.slice(0, 3))
-          
-          if (realSessions.length > 0) {
-            // ✅ HÁ SESSÕES REAIS: Usa a mais recente em vez de criar temporária
-            const latestRealSession = realSessions[0] // Primeira é a mais recente
-            console.log(`🎯 Usando sessão real existente: ${latestRealSession}`)
-            
-            // Carrega a sessão real diretamente
-            fetch(`/api/session-history/${latestRealSession}`)
-              .then(response => response.json())
-              .then(sessionHistory => {
-                if (sessionHistory && sessionHistory.messages) {
-                  console.log(`📥 Carregando ${sessionHistory.messages.length} mensagens da sessão ${latestRealSession}`)
-                  loadExternalSession({
-                    id: latestRealSession,
-                    messages: sessionHistory.messages
-                  })
-                  
-                  // Redireciona para a sessão real se estivermos na home
-                  const currentPath = window.location.pathname
-                  if (currentPath === '/' || currentPath === '') {
-                    const projectPath = '-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
-                    const newUrl = `/${projectPath}/${latestRealSession}`
-                    console.log(`🚀 Redirecionando para sessão real existente: ${newUrl}`)
-                    router.push(newUrl)
-                  }
-                } else {
-                  // Sessão existe mas sem histórico - cria vazia
-                  migrateToRealSession(latestRealSession)
-                }
-              })
-              .catch(error => {
-                console.error('❌ Erro ao carregar sessão real:', error)
-                // Fallback: cria sessão temporária
-                console.log('🔄 Fallback: criando sessão temporária')
-                createSession()
-              })
-          } else {
-            // ❌ NENHUMA SESSÃO REAL: Cria sessão temporária normalmente
-            console.log('🆕 Nenhuma sessão real encontrada - criando temporária')
-            createSession()
-          }
-        })
-        .catch(error => {
-          console.error('❌ Erro ao verificar sessões reais:', error)
-          // Fallback: cria sessão temporária
-          console.log('🔄 Erro na verificação - criando sessão temporária')
-          createSession()
-        })
-    } else if (sessionData) {
-      console.log('📂 sessionData presente, aguardando carregamento...');
+      console.log('💬 Pronto para receber primeira mensagem...')
+      // Não faz nada - aguarda usuário enviar primeira mensagem
     }
   }, [sessionData])
 
@@ -158,27 +102,23 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
   const handleSendMessage = async (content: string) => {
     if (isStreaming) return
 
-    // ✅ CORREÇÃO: Lógica simplificada - sempre adiciona mensagem primeiro
-    // O SDK retornará o session_id real que usaremos para migração
-    
     let currentSessionId = activeSessionId
     
-    // Debug inicial
-    console.log(`🚀 Enviando mensagem - Sessão atual: ${currentSessionId}`)
-    console.log(`📊 Tipo de sessão: ${currentSessionId?.startsWith('temp-') ? 'TEMPORÁRIA' : 'REAL'}`)
-    
-    // Sempre adiciona a mensagem do usuário à sessão atual (temporária ou real)
-    if (currentSessionId) {
-      addMessage(currentSessionId, {
-        role: 'user',
-        content,
-        timestamp: new Date()
-      })
-      console.log(`📝 Mensagem adicionada à sessão: ${currentSessionId}`)
-    } else {
-      console.error('⚠️ Nenhuma sessão ativa encontrada!')
-      return
+    // Se não há sessão ativa, cria uma nova (será migrada para real automaticamente)
+    if (!currentSessionId) {
+      console.log('💬 Primeira mensagem - criando sessão...')
+      currentSessionId = createSession()
+      setActiveSession(currentSessionId)
     }
+    
+    console.log(`🚀 Enviando mensagem - Sessão: ${currentSessionId}`)
+    
+    // Adiciona mensagem do usuário
+    addMessage(currentSessionId, {
+      role: 'user',
+      content,
+      timestamp: new Date()
+    })
 
     // Inicia streaming
     setStreaming(true)
@@ -255,7 +195,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
                     const newUrl = `/${projectPath}/${data.session_id}`
                     console.log(`   🚀 REDIRECIONANDO para: ${newUrl}`)
                     router.push(newUrl)
-                    toast.success(`✅ Sessão real: ${data.session_id.slice(-8)}`)
+                    toast.success(`✅ Sessão real criada!`)
                   } else {
                     console.log(`   ℹ️ Mantendo URL atual: ${currentPath}`)
                   }

@@ -9,6 +9,7 @@ export const ChatInterface: React.FC = () => {
     const {
         messages,
         isStreaming,
+        isProcessing,
         currentStreamContent,
         sessionId,
         tokenInfo,
@@ -96,12 +97,13 @@ export const ChatInterface: React.FC = () => {
                     </div>
                 ))}
                 
-                {isStreaming && currentStreamContent && (
+                {isStreaming && (
                     <div key="streaming-msg">
                         <StreamingMessage
                             content={currentStreamContent}
                             role="assistant"
                             isStreaming={true}
+                            isProcessing={isProcessing}
                         />
                         {tokenInfo && (
                             <div className="token-info streaming-info">

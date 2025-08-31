@@ -8,7 +8,7 @@ services:
       dockerfile: Dockerfile
     container_name: cc-sdk-api
     ports:
-      - "${API_PORT:-8990}:8990"
+      - "${API_PORT:-8992}:8992"
     environment:
       # Python
       - PYTHONUNBUFFERED=1
@@ -24,7 +24,7 @@ services:
       - CLAUDE_DISABLE_TELEMETRY=1
       
       # API Config
-      - PORT=8990
+      - PORT=8992
       - MAX_SESSION_TIME=${MAX_SESSION_TIME:-3600}
       - MAX_SESSIONS_PER_IP=${MAX_SESSIONS_PER_IP:-10}
     volumes:
@@ -34,7 +34,7 @@ services:
       - claude-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8990/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8992/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -48,12 +48,12 @@ services:
       dockerfile: Dockerfile
     container_name: cc-sdk-frontend
     ports:
-      - "${FRONTEND_PORT:-3040}:3040"
+      - "${FRONTEND_PORT:-3082}:3082"
     environment:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
-      - NEXT_PUBLIC_API_URL=http://api:8990
-      - PORT=3040
+      - NEXT_PUBLIC_API_URL=http://api:8992
+      - PORT=3082
     # volumes:
       # Código fonte para desenvolvimento (comentar em produção)
       # - ./chat:/app:ro
@@ -63,7 +63,7 @@ services:
       - claude-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3040/"]
+      test: ["CMD", "curl", "-f", "http://localhost:3082/"]
       interval: 30s
       timeout: 10s
       retries: 3
