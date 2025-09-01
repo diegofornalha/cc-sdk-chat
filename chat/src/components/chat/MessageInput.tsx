@@ -29,26 +29,31 @@ export function MessageInput({
   const [isComposing, setIsComposing] = React.useState(false)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
-  // 🔒 DETECTA ABAS DO TERMINAL (somente leitura)
-  const isTerminalTab = React.useMemo(() => {
+  // 🔒 DETECTA SESSÕES DO TERMINAL (somente leitura)
+  const isTerminalSession = React.useMemo(() => {
+    // Detecta pela URL se é sessão do terminal (-home-suthub--claude)
+    const isTerminalProject = window.location.pathname.includes('-home-suthub--claude') && 
+                              !window.location.pathname.includes('-home-suthub--claude-api-claude-code-app');
+    
     return (
       sessionId?.startsWith('project-') ||
       sessionTitle?.includes('Timeline Unificada') ||
       sessionTitle?.includes('Terminal') ||
-      sessionTitle?.includes('sessões')
+      sessionTitle?.includes('sessões') ||
+      (isTerminalProject && sessionId?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/))
     )
   }, [sessionId, sessionTitle])
 
-  // Define placeholder baseado no tipo de aba
+  // Define placeholder baseado no tipo de sessão
   const effectivePlaceholder = React.useMemo(() => {
-    if (isTerminalTab) {
-      return "📖 Disponível apenas para leitura"
+    if (isTerminalSession) {
+      return "🔒 Claude Code SDK - Somente Leitura"
     }
     return placeholder
-  }, [isTerminalTab, placeholder])
+  }, [isTerminalSession, placeholder])
 
   // Define se input está desabilitado
-  const isInputDisabled = disabled || isTerminalTab
+  const isInputDisabled = disabled || isTerminalSession
 
   // Atalho para enviar mensagem
   useHotkeys('ctrl+enter, cmd+enter', () => {
@@ -227,13 +232,13 @@ Mensagem atual: ${finalMessage}`
             <span>
               <kbd>/</kbd> Focar input
             </span>
-            {/* Indicador de aba bloqueada */}
-            {isTerminalTab && (
-              <span className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
+            {/* Indicador de sessão bloqueada */}
+            {isTerminalSession && (
+              <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
                 <div className="flex h-2 w-2 items-center justify-center">
-                  <div className="h-full w-full rounded-full bg-orange-500" />
+                  <div className="h-full w-full rounded-full bg-blue-500" />
                 </div>
-                Modo somente leitura
+                Claude Code SDK - Somente Leitura
               </span>
             )}
           </div>

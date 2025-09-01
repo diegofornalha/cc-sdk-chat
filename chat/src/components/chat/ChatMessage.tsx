@@ -545,9 +545,6 @@ export function ChatMessage({
                 {tokens && (
                   <span>Tokens: {formatTokens(tokens.input, tokens.output)}</span>
                 )}
-                {cost && (
-                  <span>Custo: USD {cost.toFixed(6)}</span>
-                )}
                 {sessionId && !sessionId.startsWith('temp-') && !sessionId.startsWith('project-') && (
                   <span title={sessionId}>Sessão: {sessionId.slice(-8)}</span>
                 )}

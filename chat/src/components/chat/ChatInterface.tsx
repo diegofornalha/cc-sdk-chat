@@ -582,7 +582,6 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
                 <div className="flex items-center gap-4">
                   <span>Mensagens: {activeSession.messages.length}</span>
                   <span>Tokens: {activeSession.metrics.totalTokens}</span>
-                  <span>Custo: ${activeSession.metrics.totalCost.toFixed(4)}</span>
                 </div>
                 
                 <div className="flex items-center gap-2">
