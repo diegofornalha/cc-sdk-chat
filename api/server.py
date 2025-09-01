@@ -6,17 +6,253 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from fastapi import Path
 from typing import Optional, Dict, Any, List
+from contextlib import asynccontextmanager
 import asyncio
 import json
 import uuid
+import psutil
+import time
+import os
+from datetime import datetime
 
 from claude_handler import ClaudeHandler, SessionConfig
 from analytics_service import AnalyticsService
 from session_manager import ClaudeCodeSessionManager
 from session_validator import SessionValidator
+from logging_config import setup_logging, get_contextual_logger
+from exception_middleware import ErrorHandlingMiddleware, StreamingErrorHandler
+from security_models import SecureChatMessage, SecureSessionAction, SecureSessionConfigRequest, SecurityHeaders
+from security_middleware import SecurityMiddleware, CORSSecurityMiddleware
+from rate_limiter import RateLimitManager
+from stability_monitor import stability_monitor, CircuitBreakerConfig, CircuitState
+from fallback_system import fallback_system, FallbackConfig, FallbackStrategy
+
+# Configuração de logging estruturado
+setup_logging(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    log_file="/home/suthub/.claude/api-claude-code-app/cc-sdk-chat/logs/api.log",
+    max_bytes=50 * 1024 * 1024,  # 50MB
+    backup_count=10
+)
+logger = get_contextual_logger(__name__)
+
+# Variáveis globais para monitoramento
+app_start_time = time.time()
+health_status = {'status': 'starting', 'last_check': None}
+metrics = {
+    'requests_total': 0,
+    'requests_in_progress': 0,
+    'errors_total': 0,
+    'sessions_created': 0,
+    'sessions_active': 0,
+    'fallbacks_used': 0,
+    'circuit_breakers_open': 0
+}
+
+# Configuração de circuit breakers
+stability_monitor.register_circuit_breaker(
+    "claude_sdk",
+    CircuitBreakerConfig(
+        failure_threshold=3,
+        success_threshold=2, 
+        timeout_seconds=30
+    )
+)
+
+stability_monitor.register_circuit_breaker(
+    "session_operations",
+    CircuitBreakerConfig(
+        failure_threshold=5,
+        timeout_seconds=60
+    )
+)
+
+# Configuração de fallbacks
+fallback_system.register_fallback(
+    "chat",
+    FallbackConfig(FallbackStrategy.CACHED_RESPONSE, priority=1, cache_ttl_seconds=180)
+)
+fallback_system.register_fallback(
+    "chat", 
+    FallbackConfig(FallbackStrategy.MOCK_RESPONSE, priority=2)
+)
+
+fallback_system.register_fallback(
+    "create_session",
+    FallbackConfig(FallbackStrategy.CACHED_RESPONSE, priority=1)
+)
+fallback_system.register_fallback(
+    "create_session",
+    FallbackConfig(FallbackStrategy.MOCK_RESPONSE, priority=2)
+)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Gerencia ciclo de vida da aplicação com inicialização e shutdown limpos."""
+    # Inicialização
+    logger.info(
+        "Iniciando Claude Chat API...",
+        extra={"event": "app_startup", "component": "server"}
+    )
+    health_status['status'] = 'healthy'
+    health_status['last_check'] = datetime.now().isoformat()
+    
+    # Inicializa handlers
+    try:
+        # Teste de conectividade com Claude SDK
+        logger.info(
+            "Verificando conectividade com Claude SDK...",
+            extra={"event": "sdk_connectivity_check", "component": "claude_sdk"}
+        )
+        
+        test_client = claude_handler.clients.get('test')
+        if not test_client:
+            await asyncio.wait_for(
+                claude_handler.create_session('test'),
+                timeout=30.0
+            )
+            await claude_handler.destroy_session('test')
+            
+        logger.info(
+            "Claude SDK conectado com sucesso",
+            extra={"event": "sdk_connected", "component": "claude_sdk"}
+        )
+        
+    except asyncio.TimeoutError:
+        logger.error(
+            "Timeout na conexão com Claude SDK",
+            extra={"event": "sdk_timeout", "component": "claude_sdk", "timeout_seconds": 30}
+        )
+        health_status['status'] = 'degraded'
+    except Exception as e:
+        logger.error(
+            "Problema na inicialização do Claude SDK",
+            extra={
+                "event": "sdk_init_error", 
+                "component": "claude_sdk",
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        )
+        health_status['status'] = 'degraded'
+    
+    logger.info(
+        "Claude Chat API iniciada com sucesso",
+        extra={"event": "app_ready", "component": "server"}
+    )
+    
+    yield
+    
+    # Shutdown limpo
+    logger.info(
+        "Iniciando shutdown graceful...",
+        extra={"event": "app_shutdown_start", "component": "server"}
+    )
+    health_status['status'] = 'shutting_down'
+    
+    # Encerra todas as sessões ativas
+    try:
+        active_sessions = list(claude_handler.clients.keys())
+        logger.info(
+            "Encerrando sessões ativas...",
+            extra={
+                "event": "sessions_cleanup",
+                "component": "session_manager",
+                "active_sessions_count": len(active_sessions)
+            }
+        )
+        
+        # Timeout para shutdown de cada sessão
+        shutdown_tasks = []
+        for session_id in active_sessions:
+            task = asyncio.create_task(
+                asyncio.wait_for(
+                    claude_handler.destroy_session(session_id),
+                    timeout=10.0
+                )
+            )
+            shutdown_tasks.append((session_id, task))
+        
+        # Aguarda todas as sessões ou timeout geral
+        try:
+            for session_id, task in shutdown_tasks:
+                try:
+                    await task
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Timeout ao encerrar sessão",
+                        extra={
+                            "event": "session_shutdown_timeout",
+                            "session_id": session_id,
+                            "timeout_seconds": 10
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Erro ao encerrar sessão",
+                        extra={
+                            "event": "session_shutdown_error",
+                            "session_id": session_id,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e)
+                        }
+                    )
+        except Exception as e:
+            logger.error(
+                "Erro geral no shutdown de sessões",
+                extra={
+                    "event": "sessions_cleanup_error",
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)
+                }
+            )
+        
+        # Limpa recursos do sistema de estabilidade
+        try:
+            # Limpa cache de fallbacks
+            cache_stats = fallback_system.cache_manager.get_stats()
+            fallback_system.cache_manager.clear()
+            
+            # Reset estatísticas de fallbacks
+            fallback_system.reset_stats()
+            
+            # Log limpeza de recursos
+            logger.info(
+                "Recursos de estabilidade limpos",
+                extra={
+                    "event": "stability_cleanup",
+                    "cache_items_cleared": cache_stats.get("total_items", 0),
+                    "fallback_stats_reset": True
+                }
+            )
+            
+        except Exception as e:
+            logger.warning(f"Erro ao limpar recursos de estabilidade: {e}")
+        
+        logger.info(
+            "Sessões encerradas e recursos limpos",
+            extra={"event": "sessions_closed", "component": "session_manager"}
+        )
+        
+    except Exception as e:
+        logger.error(
+            "Erro durante shutdown",
+            extra={
+                "event": "shutdown_error",
+                "component": "server",
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        )
+    
+    logger.info(
+        "Shutdown concluído",
+        extra={"event": "app_shutdown_complete", "component": "server"}
+    )
 
 app = FastAPI(
     title="Claude Chat API",
+    lifespan=lifespan,
     description="""
     ## API de Chat com Claude Code SDK
     
@@ -75,7 +311,22 @@ app = FastAPI(
     ]
 )
 
-# Configuração CORS
+# Middleware de tratamento de erros (deve ser adicionado primeiro)
+app.add_middleware(
+    ErrorHandlingMiddleware,
+    timeout_seconds=300.0  # 5 minutos
+)
+
+# Middleware de segurança (segundo na hierarquia)
+app.add_middleware(
+    SecurityMiddleware,
+    redis_url=os.getenv("REDIS_URL")
+)
+
+# Middleware CORS específico com validação de origem
+app.add_middleware(CORSSecurityMiddleware)
+
+# Configuração CORS padrão como fallback
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -86,8 +337,11 @@ app.add_middleware(
         "http://suthub.agentesintegrados.com"
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Accept", "Accept-Language", "Content-Language", "Content-Type", 
+        "Authorization", "X-Requested-With", "X-Session-ID"
+    ],
 )
 
 # Handlers globais
@@ -95,47 +349,127 @@ claude_handler = ClaudeHandler()
 analytics_service = AnalyticsService()
 session_manager = ClaudeCodeSessionManager()
 session_validator = SessionValidator()
+rate_limiter = RateLimitManager(redis_url=os.getenv("REDIS_URL"))
 
-class ChatMessage(BaseModel):
-    """Modelo para mensagem de chat."""
-    message: str = Field(
-        ...,
-        description="Conteúdo da mensagem a ser enviada para Claude",
-        example="Olá, como você pode me ajudar hoje?"
-    )
-    session_id: Optional[str] = Field(
-        None,
-        description="ID da sessão. Se não fornecido, será gerado automaticamente",
-        example="550e8400-e29b-41d4-a716-446655440000"
-    )
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "message": "Explique o que é Machine Learning",
-                "session_id": "550e8400-e29b-41d4-a716-446655440000"
+# Funções utilitárias para monitoramento
+def get_system_metrics() -> Dict[str, Any]:
+    """Coleta métricas do sistema."""
+    try:
+        # Informações da CPU
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        cpu_count = psutil.cpu_count()
+        
+        # Informações da memória
+        memory = psutil.virtual_memory()
+        
+        # Informações do processo atual
+        process = psutil.Process()
+        process_memory = process.memory_info()
+        
+        return {
+            "cpu": {
+                "usage_percent": cpu_percent,
+                "count": cpu_count,
+                "load_average": list(psutil.getloadavg()) if hasattr(psutil, 'getloadavg') else None
+            },
+            "memory": {
+                "total_gb": round(memory.total / (1024**3), 2),
+                "available_gb": round(memory.available / (1024**3), 2),
+                "usage_percent": memory.percent,
+                "process_rss_mb": round(process_memory.rss / (1024**2), 2),
+                "process_vms_mb": round(process_memory.vms / (1024**2), 2)
+            },
+            "disk": {
+                "usage_percent": psutil.disk_usage('/').percent
             }
         }
+    except Exception as e:
+        logger.error(f"Erro ao coletar métricas do sistema: {e}")
+        return {"error": str(e)}
 
-class SessionAction(BaseModel):
-    """Modelo para ações em sessões."""
-    session_id: str = Field(
-        ...,
-        description="ID único da sessão",
-        example="550e8400-e29b-41d4-a716-446655440000"
-    )
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "session_id": "550e8400-e29b-41d4-a716-446655440000"
-            }
+async def check_claude_sdk_health() -> Dict[str, Any]:
+    """Verifica status do Claude SDK."""
+    try:
+        # Testa conectividade criando uma sessão temporária
+        test_session_id = f"health_check_{int(time.time())}"
+        
+        start_time = time.time()
+        await claude_handler.create_session(test_session_id)
+        connection_time = time.time() - start_time
+        
+        # Limpa sessão de teste
+        await claude_handler.destroy_session(test_session_id)
+        
+        return {
+            "status": "connected",
+            "connection_time_ms": round(connection_time * 1000, 2),
+            "last_check": datetime.now().isoformat()
         }
+    except Exception as e:
+        logger.error(f"Erro na verificação do Claude SDK: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "last_check": datetime.now().isoformat()
+        }
+
+# Middleware para contagem de requests
+@app.middleware("http")
+async def metrics_middleware(request, call_next):
+    """Middleware para coletar métricas de requests."""
+    metrics['requests_total'] += 1
+    metrics['requests_in_progress'] += 1
+    
+    start_time = time.time()
+    
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as e:
+        metrics['errors_total'] += 1
+        raise
+    finally:
+        metrics['requests_in_progress'] -= 1
+
+# Modelos de dados removidos - usando versões seguras de security_models.py
 
 class HealthResponse(BaseModel):
     """Resposta do health check."""
     status: str = Field(..., description="Status da API", example="ok")
     service: str = Field(..., description="Nome do serviço", example="Claude Chat API")
+
+class DetailedHealthResponse(BaseModel):
+    """Resposta detalhada do health check."""
+    status: str = Field(..., description="Status geral", example="healthy")
+    service: str = Field(..., description="Nome do serviço", example="Claude Chat API")
+    version: str = Field(..., description="Versão da API", example="1.0.0")
+    uptime_seconds: float = Field(..., description="Tempo de atividade em segundos")
+    timestamp: str = Field(..., description="Timestamp da verificação")
+    sessions: Dict[str, Any] = Field(..., description="Estatísticas de sessões")
+    system: Dict[str, Any] = Field(..., description="Métricas do sistema")
+    claude_sdk: Dict[str, Any] = Field(..., description="Status do Claude SDK")
+    performance: Dict[str, Any] = Field(..., description="Métricas de performance")
+    stability: Dict[str, Any] = Field(..., description="Status de estabilidade e circuit breakers")
+    fallback_stats: Dict[str, Any] = Field(..., description="Estatísticas dos fallbacks")
+
+class MetricsResponse(BaseModel):
+    """Resposta com métricas básicas."""
+    requests_total: int = Field(..., description="Total de requests processados")
+    requests_in_progress: int = Field(..., description="Requests em andamento")
+    errors_total: int = Field(..., description="Total de erros")
+    sessions_created: int = Field(..., description="Sessões criadas")
+    sessions_active: int = Field(..., description="Sessões ativas")
+    uptime_seconds: float = Field(..., description="Tempo de atividade")
+    fallbacks_used: int = Field(..., description="Total de fallbacks utilizados")
+    circuit_breakers_open: int = Field(..., description="Circuit breakers atualmente abertos")
+    memory_usage_percent: float = Field(..., description="Uso de memória em %")
+    cpu_usage_percent: float = Field(..., description="Uso de CPU em %")
+
+class HeartbeatResponse(BaseModel):
+    """Resposta do heartbeat."""
+    alive: bool = Field(..., description="Indica se o serviço está vivo")
+    timestamp: str = Field(..., description="Timestamp do heartbeat")
+    uptime: float = Field(..., description="Tempo de atividade")
 
 class SessionResponse(BaseModel):
     """Resposta para operações de sessão."""
@@ -153,24 +487,7 @@ class StreamEvent(BaseModel):
     session_id: str = Field(..., description="ID da sessão", example="550e8400-e29b-41d4-a716-446655440000")
     error: Optional[str] = Field(None, description="Mensagem de erro se houver")
 
-class SessionConfigRequest(BaseModel):
-    """Configuração para criar ou atualizar uma sessão."""
-    system_prompt: Optional[str] = Field(None, description="System prompt para a sessão", example="Você é um assistente útil")
-    allowed_tools: Optional[List[str]] = Field(default_factory=list, description="Ferramentas permitidas", example=["Read", "Write", "Bash"])
-    max_turns: Optional[int] = Field(None, description="Número máximo de turnos", example=10)
-    permission_mode: str = Field('acceptEdits', description="Modo de permissão para edições", example="acceptEdits")
-    cwd: Optional[str] = Field(None, description="Diretório de trabalho", example="/home/user/projeto")
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "system_prompt": "Você é um assistente especializado em Python",
-                "allowed_tools": ["Read", "Write", "Bash"],
-                "max_turns": 10,
-                "permission_mode": "acceptEdits",
-                "cwd": "/home/user/projeto"
-            }
-        }
+# SessionConfigRequest removido - usando SecureSessionConfigRequest
 
 class SessionInfoResponse(BaseModel):
     """Informações detalhadas de uma sessão."""
@@ -201,6 +518,246 @@ async def root() -> HealthResponse:
     """Health check endpoint para verificar o status da API."""
     return HealthResponse(status="ok", service="Claude Chat API")
 
+@app.get(
+    "/health/detailed",
+    tags=["Sistema"],
+    summary="Health Check Detalhado",
+    description="""Verifica status detalhado da API com métricas completas.
+    
+    Inclui:
+    - Status de sessões ativas
+    - Uso de memória e CPU  
+    - Status de conexão com Claude SDK
+    - Métricas de performance
+    - Tempo de atividade
+    """,
+    response_description="Status detalhado da API",
+    response_model=DetailedHealthResponse
+)
+async def detailed_health() -> DetailedHealthResponse:
+    """Health check detalhado com métricas completas."""
+    current_time = datetime.now()
+    uptime = time.time() - app_start_time
+    
+    # Atualiza status global
+    health_status['last_check'] = current_time.isoformat()
+    
+    # Coleta informações de sessões
+    active_sessions = list(claude_handler.clients.keys())
+    session_info = {
+        "active_count": len(active_sessions),
+        "total_created": metrics['sessions_created'],
+        "active_sessions": active_sessions[:10],  # Mostra apenas 10 primeiras
+        "session_configs": len(claude_handler.session_configs)
+    }
+    
+    # Métricas do sistema
+    system_metrics = get_system_metrics()
+    
+    # Status do Claude SDK
+    claude_status = await check_claude_sdk_health()
+    
+    # Métricas de performance
+    performance_metrics = {
+        "requests_total": metrics['requests_total'],
+        "requests_in_progress": metrics['requests_in_progress'], 
+        "errors_total": metrics['errors_total'],
+        "error_rate": round(metrics['errors_total'] / max(metrics['requests_total'], 1) * 100, 2),
+        "avg_response_time_ms": None  # Pode ser implementado com histórico
+    }
+    
+    # Status de estabilidade e circuit breakers
+    stability_status = stability_monitor.get_system_status()
+    fallback_stats = fallback_system.get_fallback_stats()
+    
+    # Conta circuit breakers abertos
+    open_breakers = sum(1 for cb_stats in stability_status["circuit_breakers"].values() 
+                       if cb_stats["state"] == "open")
+    metrics['circuit_breakers_open'] = open_breakers
+    
+    # Conta fallbacks usados
+    total_fallbacks_used = sum(stats.get("fallback_used", 0) 
+                              for stats in fallback_stats.get("operations", {}).values())
+    metrics['fallbacks_used'] = total_fallbacks_used
+    
+    # Executa health checks registrados
+    health_check_results = await stability_monitor.run_health_checks()
+    
+    # Determina status geral
+    overall_status = "healthy"
+    
+    # Verifica condições de degradação
+    if claude_status.get("status") == "error":
+        overall_status = "degraded"
+    elif system_metrics.get("memory", {}).get("usage_percent", 0) > 90:
+        overall_status = "degraded"
+    elif performance_metrics.get("error_rate", 0) > 10:
+        overall_status = "degraded"
+    elif open_breakers > 0:
+        overall_status = "degraded"
+    elif health_check_results.get("overall_status") != "healthy":
+        overall_status = "degraded"
+    
+    return DetailedHealthResponse(
+        status=overall_status,
+        service="Claude Chat API",
+        version="1.0.0",
+        uptime_seconds=uptime,
+        timestamp=current_time.isoformat(),
+        sessions=session_info,
+        system=system_metrics,
+        claude_sdk=claude_status,
+        performance=performance_metrics,
+        stability=stability_status,
+        fallback_stats=fallback_stats
+    )
+
+@app.get(
+    "/metrics",
+    tags=["Sistema"],
+    summary="Métricas Básicas",
+    description="Retorna métricas básicas para monitoramento externo",
+    response_description="Métricas básicas de monitoramento",
+    response_model=MetricsResponse
+)
+async def get_metrics() -> MetricsResponse:
+    """Endpoint de métricas básicas para monitoramento."""
+    uptime = time.time() - app_start_time
+    metrics['sessions_active'] = len(claude_handler.clients)
+    
+    # Coleta métricas de sistema
+    try:
+        memory = psutil.virtual_memory()
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+    except:
+        memory_percent = 0.0
+        cpu_percent = 0.0
+    else:
+        memory_percent = memory.percent
+    
+    # Atualiza métricas de estabilidade
+    stability_status = stability_monitor.get_system_status()
+    open_breakers = sum(1 for cb_stats in stability_status["circuit_breakers"].values() 
+                       if cb_stats["state"] == "open")
+    metrics['circuit_breakers_open'] = open_breakers
+    
+    fallback_stats = fallback_system.get_fallback_stats()
+    total_fallbacks_used = sum(stats.get("fallback_used", 0) 
+                              for stats in fallback_stats.get("operations", {}).values())
+    metrics['fallbacks_used'] = total_fallbacks_used
+    
+    return MetricsResponse(
+        requests_total=metrics['requests_total'],
+        requests_in_progress=metrics['requests_in_progress'],
+        errors_total=metrics['errors_total'],
+        sessions_created=metrics['sessions_created'],
+        sessions_active=metrics['sessions_active'],
+        uptime_seconds=uptime,
+        fallbacks_used=metrics['fallbacks_used'],
+        circuit_breakers_open=metrics['circuit_breakers_open'],
+        memory_usage_percent=memory_percent,
+        cpu_usage_percent=cpu_percent
+    )
+
+@app.get(
+    "/heartbeat",
+    tags=["Sistema"],
+    summary="Heartbeat",
+    description="Endpoint simples para verificação de vida do serviço",
+    response_description="Confirmação de que o serviço está vivo",
+    response_model=HeartbeatResponse
+)
+async def heartbeat() -> HeartbeatResponse:
+    """Heartbeat simples para monitoramento externo."""
+    return HeartbeatResponse(
+        alive=True,
+        timestamp=datetime.now().isoformat(),
+        uptime=time.time() - app_start_time
+    )
+
+@app.get(
+    "/health/stability",
+    tags=["Sistema"],
+    summary="Status de Estabilidade",
+    description="Retorna status detalhado dos circuit breakers e sistema de fallbacks",
+    response_description="Status de estabilidade do sistema"
+)
+async def get_stability_status():
+    """Endpoint específico para monitoramento de estabilidade."""
+    stability_status = stability_monitor.get_system_status()
+    fallback_stats = fallback_system.get_fallback_stats()
+    
+    return {
+        "timestamp": datetime.now().isoformat(),
+        "circuit_breakers": stability_status["circuit_breakers"],
+        "fallback_statistics": fallback_stats,
+        "health_checks": stability_status["health_checks"],
+        "summary": {
+            "total_circuit_breakers": len(stability_status["circuit_breakers"]),
+            "open_circuit_breakers": sum(1 for cb in stability_status["circuit_breakers"].values() 
+                                       if cb["state"] == "open"),
+            "total_operations_with_fallbacks": len(fallback_stats.get("operations", {})),
+            "total_fallbacks_used": sum(stats.get("fallback_used", 0) 
+                                      for stats in fallback_stats.get("operations", {}).values())
+        }
+    }
+
+@app.post(
+    "/health/circuit-breaker/{circuit_name}/reset",
+    tags=["Sistema"],
+    summary="Resetar Circuit Breaker",
+    description="Força reset de um circuit breaker específico",
+    response_description="Resultado do reset"
+)
+async def reset_circuit_breaker(circuit_name: str):
+    """Reseta um circuit breaker específico."""
+    cb = stability_monitor.get_circuit_breaker(circuit_name)
+    
+    if not cb:
+        raise HTTPException(status_code=404, detail=f"Circuit breaker '{circuit_name}' não encontrado")
+    
+    # Reset manual do circuit breaker
+    cb.state = CircuitState.CLOSED
+    cb.failure_count = 0
+    cb.success_count = 0
+    cb.last_failure_time = None
+    cb.half_open_requests = 0
+    
+    logger.info(
+        f"Circuit breaker '{circuit_name}' resetado manualmente",
+        extra={"event": "circuit_breaker_manual_reset", "circuit_name": circuit_name}
+    )
+    
+    return {
+        "circuit_breaker": circuit_name,
+        "status": "reset",
+        "new_state": cb.state.value,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post(
+    "/health/fallback-cache/clear",
+    tags=["Sistema"], 
+    summary="Limpar Cache de Fallbacks",
+    description="Limpa todo o cache de fallbacks do sistema",
+    response_description="Resultado da limpeza"
+)
+async def clear_fallback_cache():
+    """Limpa o cache de fallbacks."""
+    cache_stats_before = fallback_system.cache_manager.get_stats()
+    fallback_system.cache_manager.clear()
+    
+    logger.info(
+        "Cache de fallbacks limpo manualmente",
+        extra={"event": "fallback_cache_cleared", "items_cleared": cache_stats_before["total_items"]}
+    )
+    
+    return {
+        "status": "cleared",
+        "items_cleared": cache_stats_before["total_items"],
+        "timestamp": datetime.now().isoformat()
+    }
+
 @app.post(
     "/api/chat",
     tags=["Chat"],
@@ -225,47 +782,155 @@ async def root() -> HealthResponse:
         }
     }
 )
-async def send_message(chat_message: ChatMessage) -> StreamingResponse:
+async def send_message(chat_message: SecureChatMessage) -> StreamingResponse:
     """Envia mensagem para Claude e retorna resposta em streaming."""
     
     # Se não há session_id, deixa None para Claude SDK criar
     session_id = chat_message.session_id
     
+    # Log início da mensagem
+    logger.info(
+        "Iniciando envio de mensagem",
+        extra={
+            "event": "chat_message_start",
+            "session_id": session_id or "new",
+            "message_length": len(chat_message.message),
+            "message_preview": chat_message.message[:100] + "..." if len(chat_message.message) > 100 else chat_message.message
+        }
+    )
+    
     async def generate():
-        """Gera stream SSE."""
+        """Gera stream SSE com tratamento robusto de erros."""
         # Inicializa real_session_id no escopo da função
         real_session_id = session_id
+        start_time = time.time()
+        total_chunks = 0
         
         try:
-            async for response in claude_handler.send_message(
-                session_id, 
-                chat_message.message
-            ):
-                # Captura session_id real quando disponível
-                if "session_id" in response:
-                    real_session_id = response["session_id"]
-                    
-                # Se é primeira mensagem sem session_id, envia evento de nova sessão
-                if not session_id and real_session_id and real_session_id != session_id:
-                    migration_data = json.dumps({
-                        "type": "session_migrated",
-                        "session_id": real_session_id,
-                        "migrated": False  # Nova sessão, não migração
-                    })
-                    yield f"data: {migration_data}\n\n"
-                
-                # Formato SSE
-                data = json.dumps(response)
+            # Usa sistema de fallbacks para execução protegida
+            async def execute_chat():
+                async for response in claude_handler.send_message(
+                    session_id, 
+                    chat_message.message
+                ):
+                    yield response
+            
+            # Executa com circuit breaker e fallbacks
+            chat_result = await fallback_system.execute_with_fallback(
+                "chat",
+                execute_chat,
+                {"session_id": session_id, "message": chat_message.message[:100]}
+            )
+            
+            # Se usou fallback, envia resposta mock
+            if chat_result.get("fallback_used"):
+                mock_response = chat_result["result"]
+                data = json.dumps(mock_response)
                 yield f"data: {data}\n\n"
-                
+                total_chunks += 1
+            else:
+                # Execução normal - itera sobre os responses
+                async for response in chat_result["result"]:
+                    # Captura session_id real quando disponível
+                    if "session_id" in response:
+                        real_session_id = response["session_id"]
+                        
+                    # Se é primeira mensagem sem session_id, envia evento de nova sessão
+                    if not session_id and real_session_id and real_session_id != session_id:
+                        migration_data = json.dumps({
+                            "type": "session_migrated",
+                            "session_id": real_session_id,
+                            "migrated": False  # Nova sessão, não migração
+                        })
+                        yield f"data: {migration_data}\n\n"
+                        
+                        logger.info(
+                            "Nova sessão criada durante streaming",
+                            extra={
+                                "event": "session_auto_created",
+                                "new_session_id": real_session_id
+                            }
+                        )
+                    
+                    # Formato SSE
+                    data = json.dumps(response)
+                    yield f"data: {data}\n\n"
+                    total_chunks += 1
+                    
         except Exception as e:
-            error_data = json.dumps({
-                "type": "error",
-                "error": str(e),
-                "session_id": real_session_id or "unknown"
-            })
-            yield f"data: {error_data}\n\n"
+            # Tenta fallback em caso de erro
+            try:
+                fallback_result = await fallback_system.execute_with_fallback(
+                    "chat",
+                    lambda: {"type": "content", "content": f"Erro no sistema: {str(e)}", "session_id": real_session_id or "error"},
+                    {"session_id": real_session_id or "error", "error": str(e)}
+                )
+                
+                if fallback_result.get("fallback_used"):
+                    mock_response = fallback_result["result"] 
+                    data = json.dumps(mock_response)
+                    yield f"data: {data}\n\n"
+                    total_chunks += 1
+                    
+            except Exception as fallback_error:
+                logger.error(f"Falha também no fallback: {fallback_error}")
+                # Fallback final manual
+                error_response = {
+                    "type": "content",
+                    "content": "⚠️ Sistema temporariamente indisponível. Tente novamente em alguns minutos.",
+                    "session_id": real_session_id or "emergency",
+                    "error": True
+                }
+                data = json.dumps(error_response)
+                yield f"data: {data}\n\n"
+                total_chunks += 1
+                
+        except asyncio.TimeoutError:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error(
+                "Timeout no streaming de mensagem",
+                extra={
+                    "event": "chat_streaming_timeout",
+                    "session_id": real_session_id or "unknown",
+                    "duration_ms": duration_ms,
+                    "chunks_sent": total_chunks
+                }
+            )
+            yield await StreamingErrorHandler.handle_streaming_error(
+                asyncio.TimeoutError("Timeout no processamento da mensagem"),
+                real_session_id or "unknown"
+            )
+            
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            logger.error(
+                "Erro durante streaming de mensagem",
+                extra={
+                    "event": "chat_streaming_error",
+                    "session_id": real_session_id or "unknown",
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "duration_ms": duration_ms,
+                    "chunks_sent": total_chunks
+                }
+            )
+            yield await StreamingErrorHandler.handle_streaming_error(
+                e, real_session_id or "unknown"
+            )
         finally:
+            duration_ms = (time.time() - start_time) * 1000
+            
+            # Log final do streaming
+            logger.info(
+                "Finalizando streaming de mensagem",
+                extra={
+                    "event": "chat_streaming_complete",
+                    "session_id": real_session_id or "unknown",
+                    "duration_ms": duration_ms,
+                    "total_chunks": total_chunks
+                }
+            )
+            
             # Envia evento de fim com session_id real
             final_data = {
                 'type': 'done', 
@@ -307,14 +972,69 @@ async def send_message(chat_message: ChatMessage) -> StreamingResponse:
     },
     response_model=StatusResponse
 )
-async def interrupt_session(action: SessionAction) -> StatusResponse:
+async def interrupt_session(action: SecureSessionAction) -> StatusResponse:
     """Interrompe a execução de uma sessão ativa."""
-    success = await claude_handler.interrupt_session(action.session_id)
+    logger.info(
+        "Iniciando interrupção de sessão",
+        extra={
+            "event": "session_interrupt_start",
+            "session_id": action.session_id
+        }
+    )
     
-    if not success:
-        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        success = await asyncio.wait_for(
+            claude_handler.interrupt_session(action.session_id),
+            timeout=10.0  # Timeout de 10 segundos para interrupção
+        )
         
-    return StatusResponse(status="interrupted", session_id=action.session_id)
+        if not success:
+            logger.warning(
+                "Sessão não encontrada para interrupção",
+                extra={
+                    "event": "session_not_found",
+                    "session_id": action.session_id
+                }
+            )
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        logger.info(
+            "Sessão interrompida com sucesso",
+            extra={
+                "event": "session_interrupted",
+                "session_id": action.session_id
+            }
+        )
+        
+        return StatusResponse(status="interrupted", session_id=action.session_id)
+        
+    except asyncio.TimeoutError:
+        logger.error(
+            "Timeout ao interromper sessão",
+            extra={
+                "event": "session_interrupt_timeout",
+                "session_id": action.session_id,
+                "timeout_seconds": 10
+            }
+        )
+        raise HTTPException(
+            status_code=408, 
+            detail="Timeout ao interromper sessão"
+        )
+    except Exception as e:
+        logger.error(
+            "Erro ao interromper sessão",
+            extra={
+                "event": "session_interrupt_error",
+                "session_id": action.session_id,
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno ao interromper sessão: {str(e)}"
+        )
 
 @app.post(
     "/api/clear",
@@ -337,10 +1057,59 @@ async def interrupt_session(action: SessionAction) -> StatusResponse:
     },
     response_model=StatusResponse
 )
-async def clear_session(action: SessionAction) -> StatusResponse:
+async def clear_session(action: SecureSessionAction) -> StatusResponse:
     """Limpa o contexto e histórico de uma sessão."""
-    await claude_handler.clear_session(action.session_id)
-    return StatusResponse(status="cleared", session_id=action.session_id)
+    logger.info(
+        "Iniciando limpeza de sessão",
+        extra={
+            "event": "session_clear_start",
+            "session_id": action.session_id
+        }
+    )
+    
+    try:
+        await asyncio.wait_for(
+            claude_handler.clear_session(action.session_id),
+            timeout=30.0  # Timeout de 30 segundos para limpeza
+        )
+        
+        logger.info(
+            "Sessão limpa com sucesso",
+            extra={
+                "event": "session_cleared",
+                "session_id": action.session_id
+            }
+        )
+        
+        return StatusResponse(status="cleared", session_id=action.session_id)
+        
+    except asyncio.TimeoutError:
+        logger.error(
+            "Timeout ao limpar sessão",
+            extra={
+                "event": "session_clear_timeout",
+                "session_id": action.session_id,
+                "timeout_seconds": 30
+            }
+        )
+        raise HTTPException(
+            status_code=408,
+            detail="Timeout ao limpar sessão"
+        )
+    except Exception as e:
+        logger.error(
+            "Erro ao limpar sessão",
+            extra={
+                "event": "session_clear_error",
+                "session_id": action.session_id,
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno ao limpar sessão: {str(e)}"
+        )
 
 
 @app.delete(
@@ -369,8 +1138,57 @@ async def clear_session(action: SessionAction) -> StatusResponse:
 )
 async def delete_session(session_id: str = Path(..., description="ID único da sessão a ser deletada")) -> StatusResponse:
     """Remove permanentemente uma sessão."""
-    await claude_handler.destroy_session(session_id)
-    return StatusResponse(status="deleted", session_id=session_id)
+    logger.info(
+        "Iniciando deleção de sessão",
+        extra={
+            "event": "session_delete_start",
+            "session_id": session_id
+        }
+    )
+    
+    try:
+        await asyncio.wait_for(
+            claude_handler.destroy_session(session_id),
+            timeout=30.0  # Timeout de 30 segundos para deleção
+        )
+        
+        logger.info(
+            "Sessão deletada com sucesso",
+            extra={
+                "event": "session_deleted",
+                "session_id": session_id
+            }
+        )
+        
+        return StatusResponse(status="deleted", session_id=session_id)
+        
+    except asyncio.TimeoutError:
+        logger.error(
+            "Timeout ao deletar sessão",
+            extra={
+                "event": "session_delete_timeout",
+                "session_id": session_id,
+                "timeout_seconds": 30
+            }
+        )
+        raise HTTPException(
+            status_code=408,
+            detail="Timeout ao deletar sessão"
+        )
+    except Exception as e:
+        logger.error(
+            "Erro ao deletar sessão",
+            extra={
+                "event": "session_delete_error",
+                "session_id": session_id,
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro interno ao deletar sessão: {str(e)}"
+        )
 
 @app.post(
     "/api/session-with-config",
@@ -393,7 +1211,7 @@ async def delete_session(session_id: str = Path(..., description="ID único da s
     },
     response_model=SessionResponse
 )
-async def create_session_with_config(config: SessionConfigRequest) -> SessionResponse:
+async def create_session_with_config(config: SecureSessionConfigRequest) -> SessionResponse:
     """Cria uma sessão com configurações específicas."""
     session_id = str(uuid.uuid4())
     
@@ -406,6 +1224,11 @@ async def create_session_with_config(config: SessionConfigRequest) -> SessionRes
     )
     
     await claude_handler.create_session(session_id, session_config)
+    
+    # Atualiza métricas
+    metrics['sessions_created'] += 1
+    
+    logger.info(f"✅ Sessão criada: {session_id}")
     return SessionResponse(session_id=session_id)
 
 @app.put(
@@ -434,7 +1257,7 @@ async def create_session_with_config(config: SessionConfigRequest) -> SessionRes
 )
 async def update_session_config(
     session_id: str = Path(..., description="ID da sessão"),
-    config: SessionConfigRequest = ...
+    config: SecureSessionConfigRequest = ...
 ) -> StatusResponse:
     """Atualiza configuração de uma sessão."""
     session_config = SessionConfig(
@@ -1006,6 +1829,181 @@ async def load_project_history(request: dict):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao carregar histórico: {str(e)}")
+
+@app.get(
+    "/api/security/session-validation/{session_id}",
+    tags=["Segurança"],
+    summary="Validação de Segurança de Sessão",
+    description="""Executa validação completa de segurança para uma sessão específica.
+    
+    Retorna score de segurança, issues encontradas e recomendações.
+    """,
+    response_description="Relatório de segurança da sessão"
+)
+async def validate_session_security(session_id: str = Path(..., description="ID da sessão")) -> Dict[str, Any]:
+    """Valida segurança completa de uma sessão."""
+    try:
+        validation_result = session_validator.validate_session_security(session_id)
+        
+        logger.info(
+            "Validação de segurança de sessão executada",
+            extra={
+                "event": "security_validation",
+                "session_id": session_id,
+                "risk_level": validation_result["risk_level"],
+                "security_score": validation_result["security_score"],
+                "allowed": validation_result["allowed"]
+            }
+        )
+        
+        return validation_result
+        
+    except Exception as e:
+        logger.error(
+            "Erro na validação de segurança",
+            extra={
+                "event": "security_validation_error",
+                "session_id": session_id,
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro na validação de segurança: {str(e)}"
+        )
+
+@app.get(
+    "/api/security/suspicious-sessions",
+    tags=["Segurança"],
+    summary="Escanear Sessões Suspeitas",
+    description="""Escaneia sistema em busca de sessões suspeitas ou com problemas de segurança.
+    
+    Identifica sessões com formato inválido, arquivos corrompidos, etc.
+    """,
+    response_description="Relatório de sessões suspeitas"
+)
+async def scan_suspicious_sessions() -> Dict[str, Any]:
+    """Escaneia por sessões suspeitas no sistema."""
+    try:
+        suspicious = session_validator.scan_for_suspicious_sessions()
+        
+        total_suspicious = sum(len(sessions) for sessions in suspicious.values())
+        
+        logger.info(
+            "Scan de sessões suspeitas executado",
+            extra={
+                "event": "suspicious_sessions_scan",
+                "total_suspicious": total_suspicious,
+                "categories": {k: len(v) for k, v in suspicious.items()}
+            }
+        )
+        
+        return {
+            "summary": {
+                "total_suspicious": total_suspicious,
+                "categories_found": len([k for k, v in suspicious.items() if v]),
+                "scan_timestamp": datetime.now().isoformat()
+            },
+            "details": suspicious,
+            "recommendations": [
+                "Execute limpeza das sessões com formato inválido" if suspicious["invalid_format"] else None,
+                "Verifique sessões com arquivos grandes" if suspicious["large_files"] else None,
+                "Considere arquivar sessões antigas" if suspicious["old_sessions"] else None,
+                "Remove sessões vazias" if suspicious["empty_sessions"] else None,
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(
+            "Erro no scan de sessões suspeitas",
+            extra={
+                "event": "suspicious_scan_error",
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro no scan: {str(e)}"
+        )
+
+@app.post(
+    "/api/security/cleanup-sessions",
+    tags=["Segurança"],
+    summary="Limpeza de Sessões Inválidas",
+    description="""Remove sessões inválidas ou suspeitas do sistema.
+    
+    Por padrão executa em dry-run. Use 'execute=true' para executar de fato.
+    """,
+    response_description="Resultado da limpeza"
+)
+async def cleanup_invalid_sessions(execute: bool = False) -> Dict[str, Any]:
+    """Limpa sessões inválidas do sistema."""
+    try:
+        result = session_validator.cleanup_invalid_sessions(dry_run=not execute)
+        
+        logger.info(
+            "Limpeza de sessões executada",
+            extra={
+                "event": "session_cleanup",
+                "dry_run": result["dry_run"],
+                "removed_count": result["removed_count"],
+                "size_recovered": result["size_recovered"],
+                "errors_count": len(result["errors"])
+            }
+        )
+        
+        # Adiciona informações úteis
+        result["size_recovered_mb"] = round(result["size_recovered"] / (1024 * 1024), 2)
+        result["timestamp"] = datetime.now().isoformat()
+        
+        return result
+        
+    except Exception as e:
+        logger.error(
+            "Erro na limpeza de sessões",
+            extra={
+                "event": "cleanup_error",
+                "error_type": type(e).__name__,
+                "error_message": str(e)
+            }
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro na limpeza: {str(e)}"
+        )
+
+@app.get(
+    "/api/security/rate-limit-status",
+    tags=["Segurança"],
+    summary="Status de Rate Limiting",
+    description="""Retorna status atual de rate limiting para o cliente.
+    
+    Mostra quantas requisições restam e quando o limite reseta.
+    """,
+    response_description="Status do rate limiting"
+)
+async def get_rate_limit_status(request: Request) -> Dict[str, Any]:
+    """Obtém status de rate limiting para o cliente atual."""
+    try:
+        client_ip = request.client.host if request.client else "unknown"
+        
+        # Simula verificação de rate limit (sem consumir)
+        status = await rate_limiter.get_client_status(client_ip, str(request.url.path))
+        
+        return {
+            "client_ip": client_ip,
+            "timestamp": datetime.now().isoformat(),
+            **status
+        }
+        
+    except Exception as e:
+        logger.error(f"Erro ao obter status de rate limiting: {e}")
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 if __name__ == "__main__":
     import uvicorn

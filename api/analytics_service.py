@@ -6,11 +6,14 @@ Extrai métricas reais dos arquivos .jsonl para analytics precisos.
 
 import json
 import glob
+import asyncio
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from dataclasses import dataclass
-import asyncio
+
+from logging_config import get_contextual_logger
+from exception_middleware import handle_errors
 
 
 @dataclass
@@ -51,6 +54,16 @@ class AnalyticsService:
     
     def __init__(self):
         self.claude_projects = Path.home() / ".claude" / "projects"
+        self.logger = get_contextual_logger(__name__)
+        
+        self.logger.info(
+            "Analytics Service inicializado",
+            extra={
+                "event": "analytics_init",
+                "component": "analytics_service",
+                "claude_projects_path": str(self.claude_projects)
+            }
+        )
         
     async def get_global_analytics(self) -> GlobalAnalytics:
         """Obtém analytics globais de todas as sessões."""
