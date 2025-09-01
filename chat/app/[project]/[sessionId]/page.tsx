@@ -15,11 +15,6 @@ export default function SessionViewerPage() {
       return sessionSlug;
     }
 
-    // Para "timeline-unificada", redirecionar para a página do dashboard
-    if (sessionSlug === 'timeline-unificada') {
-      window.location.href = `/${projectName}`;
-      return null;
-    }
 
     // Para URLs semânticas como "terminal-05d20033", buscar o UUID real
     if (sessionSlug.startsWith('terminal-')) {

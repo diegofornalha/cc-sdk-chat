@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -38,6 +38,7 @@ interface ProjectSession {
 export default function ProjectDashboardPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [projectSessions, setProjectSessions] = useState<ProjectSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('overview');
@@ -112,9 +113,27 @@ export default function ProjectDashboardPage() {
       
       setProjectSessions(sortedSessions);
 
-      // Sempre mostra o overview primeiro (Timeline Unificada)
-      // Usuário pode navegar para sessões específicas clicando nas abas
-      setActiveTab('overview');
+      // Define aba baseada no query parameter
+      const tabParam = searchParams.get('tab');
+      if (tabParam) {
+        // Se tem tab específica na URL (?tab=05d20033)
+        if (tabParam === 'overview') {
+          setActiveTab('overview');
+        } else {
+          // Busca sessão que termine com o ID curto
+          const matchingSession = sortedSessions.find(s => 
+            s.id.slice(-8) === tabParam || s.id === tabParam
+          );
+          if (matchingSession) {
+            setActiveTab(matchingSession.id);
+          } else {
+            setActiveTab('overview'); // Fallback
+          }
+        }
+      } else {
+        // Sem query parameter, sempre mostra overview
+        setActiveTab('overview');
+      }
 
       toast.success(`📊 Dashboard carregado: ${sessionsData.length} sessões`);
     } catch (error) {
@@ -125,35 +144,11 @@ export default function ProjectDashboardPage() {
     }
   };
 
-  const getSessionSlug = (session: ProjectSession, index: number) => {
-    const firstMessage = session.messages?.[0]?.content;
-    
-    // Se é a primeira sessão (index 0), é a original
-    if (index === 0) {
-      return `terminal-${session.id.slice(-8)}`;
-    }
-    
-    // Para outras sessões, detecta se referencia a sessão original
-    if (firstMessage?.includes('05d20033') || firstMessage?.includes('Sessão:')) {
-      return 'terminal-05d20033';
-    }
-    
-    return `terminal-${session.id.slice(-8)}`;
-  };
 
   const handleSessionClick = (sessionId: string) => {
-    const session = projectSessions.find(s => s.id === sessionId);
-    const index = projectSessions.findIndex(s => s.id === sessionId);
-    
-    if (session && index !== -1) {
-      const slug = getSessionSlug(session, index);
-      const newUrl = `/${projectName}/${slug}`;
-      router.push(newUrl);
-    } else {
-      // Fallback para UUID se não encontrar
-      const newUrl = `/${projectName}/${sessionId}`;
-      router.push(newUrl);
-    }
+    // Vai diretamente para o chat com UUID completo (sem redundância)
+    const newUrl = `/${projectName}/${sessionId}`;
+    router.push(newUrl);
   };
 
   const calculateTotalStats = () => {
@@ -265,7 +260,8 @@ export default function ProjectDashboardPage() {
               {/* Aba Overview sempre primeira */}
               <TabsTrigger 
                 value="overview" 
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() => router.push(`/${projectName}?tab=overview`)}
               >
                 <Activity className="h-4 w-4" />
                 📋 Timeline Unificada
@@ -278,7 +274,8 @@ export default function ProjectDashboardPage() {
                   <TabsTrigger 
                     key={session.id} 
                     value={session.id}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 cursor-pointer"
+                    onClick={() => router.push(`/${projectName}?tab=${session.id.slice(-8)}`)}
                   >
                     <span className="flex items-center gap-1 px-1.5 py-0.5 bg-muted rounded text-xs font-medium">
                       #{index + 1}
