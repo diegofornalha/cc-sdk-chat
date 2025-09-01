@@ -12,6 +12,7 @@ interface MessageInputProps {
   placeholder?: string
   sessionId?: string
   isFirstMessage?: boolean
+  sessionTitle?: string
 }
 
 export function MessageInput({
@@ -21,15 +22,37 @@ export function MessageInput({
   disabled = false,
   placeholder = "Digite sua mensagem... (Ctrl+Enter para enviar)",
   sessionId,
-  isFirstMessage = false
+  isFirstMessage = false,
+  sessionTitle
 }: MessageInputProps) {
   const [message, setMessage] = React.useState('')
   const [isComposing, setIsComposing] = React.useState(false)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
+  // 🔒 DETECTA ABAS DO TERMINAL (somente leitura)
+  const isTerminalTab = React.useMemo(() => {
+    return (
+      sessionId?.startsWith('project-') ||
+      sessionTitle?.includes('Projeto Completo') ||
+      sessionTitle?.includes('Terminal') ||
+      sessionTitle?.includes('sessões')
+    )
+  }, [sessionId, sessionTitle])
+
+  // Define placeholder baseado no tipo de aba
+  const effectivePlaceholder = React.useMemo(() => {
+    if (isTerminalTab) {
+      return "📖 Disponível apenas para leitura"
+    }
+    return placeholder
+  }, [isTerminalTab, placeholder])
+
+  // Define se input está desabilitado
+  const isInputDisabled = disabled || isTerminalTab
+
   // Atalho para enviar mensagem
   useHotkeys('ctrl+enter, cmd+enter', () => {
-    if (!isComposing && message.trim() && !disabled && !isStreaming) {
+    if (!isComposing && message.trim() && !isInputDisabled && !isStreaming) {
       handleSend()
     }
   }, {
@@ -42,7 +65,7 @@ export function MessageInput({
   })
 
   const handleSend = async () => {
-    if (message.trim() && !disabled && !isStreaming) {
+    if (message.trim() && !isInputDisabled && !isStreaming) {
       let finalMessage = message.trim()
       
       // 🔗 DETECÇÃO INTELIGENTE: Se for primeira mensagem, buscar contexto anterior
@@ -129,8 +152,8 @@ Mensagem atual: ${finalMessage}`
               onKeyDown={handleKeyDown}
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
-              placeholder={placeholder}
-              disabled={disabled || isStreaming}
+              placeholder={effectivePlaceholder}
+              disabled={isInputDisabled || isStreaming}
               className={cn(
                 "w-full resize-none rounded-lg border bg-background px-4 py-3 pr-12",
                 "text-sm placeholder:text-muted-foreground",
@@ -156,7 +179,7 @@ Mensagem atual: ${finalMessage}`
               type="button"
               variant="outline"
               size="icon"
-              disabled={disabled || isStreaming}
+              disabled={isInputDisabled || isStreaming}
               className="h-[52px] w-[52px]"
               title="Anexar arquivo (em breve)"
             >
@@ -181,7 +204,7 @@ Mensagem atual: ${finalMessage}`
                 variant="default"
                 size="icon"
                 onClick={handleSend}
-                disabled={disabled || !message.trim()}
+                disabled={isInputDisabled || !message.trim()}
                 className="h-[52px] w-[52px]"
                 title="Enviar (Ctrl+Enter)"
               >
@@ -191,7 +214,7 @@ Mensagem atual: ${finalMessage}`
           </div>
         </div>
 
-        {/* Shortcuts hint */}
+        {/* Shortcuts hint e indicador de navegação automática */}
         <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
@@ -204,6 +227,15 @@ Mensagem atual: ${finalMessage}`
             <span>
               <kbd>/</kbd> Focar input
             </span>
+            {/* Indicador de aba bloqueada */}
+            {isTerminalTab && (
+              <span className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
+                <div className="flex h-2 w-2 items-center justify-center">
+                  <div className="h-full w-full rounded-full bg-orange-500" />
+                </div>
+                Modo somente leitura
+              </span>
+            )}
           </div>
           <span>
             {isStreaming ? 'Gerando resposta...' : 'Pronto para enviar'}

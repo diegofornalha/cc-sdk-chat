@@ -40,12 +40,21 @@ export interface SessionConfig {
   cwd?: string
 }
 
+const defaultSessionConfig: SessionConfig = {
+  systemPrompt: '',
+  allowedTools: [],
+  maxTurns: 20,
+  permissionMode: 'acceptEdits',
+  cwd: undefined
+}
+
 interface ChatStore {
   // Estado
   sessions: Map<string, Session>
   activeSessionId: string | null
   isStreaming: boolean
   streamingContent: string
+  isProcessing: boolean
   
   // Ações de sessão
   createSession: (config?: SessionConfig) => string
@@ -63,6 +72,7 @@ interface ChatStore {
   setStreaming: (streaming: boolean) => void
   setStreamingContent: (content: string) => void
   appendStreamingContent: (content: string) => void
+  setProcessing: (processing: boolean) => void
   
   // Ações de métricas
   updateMetrics: (sessionId: string, tokens: { input?: number; output?: number }, cost?: number) => void
@@ -82,10 +92,29 @@ const useChatStore = create<ChatStore>()(
     activeSessionId: null,
     isStreaming: false,
     streamingContent: '',
+    isProcessing: false,
     
     createSession: (config = {}) => {
-      // Não cria mais sessões temporárias - retorna placeholder
-      return null
+      // Cria sessão temporária que será migrada automaticamente
+      const sessionId = `temp-${Date.now()}`
+      set((state) => {
+        const session: Session = {
+          id: sessionId,
+          title: 'Nova Conversa',
+          messages: [],
+          config: { ...defaultSessionConfig, ...config },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          metrics: {
+            totalTokens: 0,
+            totalCost: 0,
+            messageCount: 0
+          }
+        }
+        state.sessions.set(sessionId, session)
+        state.activeSessionId = sessionId
+      })
+      return sessionId
     },
     
     deleteSession: (sessionId) => {
@@ -274,6 +303,7 @@ const useChatStore = create<ChatStore>()(
         state.isStreaming = streaming
         if (!streaming) {
           state.streamingContent = ''
+          state.isProcessing = false
         }
       })
     },
@@ -287,6 +317,12 @@ const useChatStore = create<ChatStore>()(
     appendStreamingContent: (content) => {
       set((state) => {
         state.streamingContent += content
+      })
+    },
+    
+    setProcessing: (processing) => {
+      set((state) => {
+        state.isProcessing = processing
       })
     },
     
@@ -466,8 +502,8 @@ const useChatStore = create<ChatStore>()(
             }
           })
           
-          // Define a sessão UNIFICADA como ativa (mostra timeline completa)
-          state.activeSessionId = unifiedSessionId
+          // Não muda a sessão ativa - mantém na sessão específica
+          // A sessão unificada fica disponível nas abas, mas não força mudança
         })
       } catch (error) {
         console.error('Erro ao carregar histórico cruzado:', error)

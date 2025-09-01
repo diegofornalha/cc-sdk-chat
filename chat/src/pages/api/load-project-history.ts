@@ -22,6 +22,12 @@ interface SessionData {
   cwd?: string
   origin?: string
   createdAt?: string
+  title?: string
+  total_messages: number
+  first_message_time: string
+  last_message_time: string
+  total_tokens: number
+  total_cost: number
 }
 
 export default async function handler(
@@ -125,12 +131,31 @@ export default async function handler(
             }
 
             if (messages.length > 0) {
+              // Calcula estatísticas da sessão
+              const totalTokens = messages.reduce((total, msg) => 
+                total + (msg.tokens?.input || 0) + (msg.tokens?.output || 0), 0
+              );
+              
+              const totalCost = messages.reduce((total, msg) => 
+                total + (msg.cost || 0), 0
+              );
+
+              const timestamps = messages.map(msg => new Date(msg.timestamp).getTime());
+              const firstTime = Math.min(...timestamps);
+              const lastTime = Math.max(...timestamps);
+
               sessions.push({
                 id: sessionId,
                 messages,
                 cwd,
-                origin,
-                createdAt: messages[0]?.timestamp
+                origin: origin || 'Claude Code',
+                createdAt: messages[0]?.timestamp,
+                title: `${origin || 'Claude Code'} (${sessionId.slice(-8)})`,
+                total_messages: messages.length,
+                first_message_time: new Date(firstTime).toISOString(),
+                last_message_time: new Date(lastTime).toISOString(),
+                total_tokens: totalTokens,
+                total_cost: totalCost
               })
             }
           } catch (fileError) {

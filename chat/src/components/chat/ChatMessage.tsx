@@ -29,12 +29,12 @@ interface ToolResultBlock {
 
 type ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock
 
-// Componentes individuais para cada tipo de bloco
-const TextBlockComponent: React.FC<{ block: TextBlock }> = ({ block }) => {
-  const html = marked(block.text, { 
+// Componentes individuais para cada tipo de bloco - Memoizados para performance
+const TextBlockComponent: React.FC<{ block: TextBlock }> = React.memo(({ block }) => {
+  const html = React.useMemo(() => marked(block.text, { 
     breaks: true,
     gfm: true
-  })
+  }), [block.text])
 
   return (
     <div 
@@ -42,9 +42,9 @@ const TextBlockComponent: React.FC<{ block: TextBlock }> = ({ block }) => {
       dangerouslySetInnerHTML={{ __html: html }}
     />
   )
-}
+})
 
-const ThinkingBlockComponent: React.FC<{ block: ThinkingBlock }> = ({ block }) => {
+const ThinkingBlockComponent: React.FC<{ block: ThinkingBlock }> = React.memo(({ block }) => {
   return (
     <div className="thinking-block border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/20 pl-4 py-3 my-3 rounded-r-lg">
       <div className="flex items-center gap-2 mb-2">
@@ -61,9 +61,9 @@ const ThinkingBlockComponent: React.FC<{ block: ThinkingBlock }> = ({ block }) =
       </div>
     </div>
   )
-}
+})
 
-const ToolUseBlockComponent: React.FC<{ block: ToolUseBlock }> = ({ block }) => {
+const ToolUseBlockComponent: React.FC<{ block: ToolUseBlock }> = React.memo(({ block }) => {
   const [isExpanded, setIsExpanded] = React.useState(false)
   const [copiedSection, setCopiedSection] = React.useState<string | null>(null)
 
@@ -199,9 +199,9 @@ const ToolUseBlockComponent: React.FC<{ block: ToolUseBlock }> = ({ block }) => 
       )}
     </div>
   )
-}
+})
 
-const ToolResultBlockComponent: React.FC<{ block: ToolResultBlock }> = ({ block }) => {
+const ToolResultBlockComponent: React.FC<{ block: ToolResultBlock }> = React.memo(({ block }) => {
   const [copied, setCopied] = React.useState(false)
   const isError = block.is_error || false
   const borderColor = isError ? 'border-red-400' : 'border-green-400'
@@ -251,7 +251,7 @@ const ToolResultBlockComponent: React.FC<{ block: ToolResultBlock }> = ({ block 
       )}
     </div>
   )
-}
+})
 
 interface ChatMessageProps {
   role: 'user' | 'assistant' | 'system'
@@ -281,16 +281,8 @@ export function ChatMessage({
   const [copied, setCopied] = React.useState(false)
   const messageRef = React.useRef<HTMLDivElement>(null)
   
-  // 🔍 DEBUG: Log do que está sendo exibido
-  React.useEffect(() => {
-    if (sessionId && role === 'assistant') {
-      console.log('📊 ChatMessage Debug:')
-      console.log(`   ├─ sessionId: ${sessionId}`)
-      console.log(`   ├─ sessionTitle: ${sessionTitle}`)
-      console.log(`   ├─ É temporária? ${sessionId?.startsWith('temp-')}`)
-      console.log(`   └─ Exibindo: ${sessionId?.startsWith('temp-') ? 'TEMPORÁRIA ❌' : `REAL ✅ (${sessionId.slice(-8)})`}`)
-    }
-  }, [sessionId, sessionTitle, role])
+  // Debug desabilitado - apenas para debugging específico quando necessário
+  // Removido para prevenir loops infinitos de logging
 
   // Função para verificar se um item é um bloco específico
   const isTextBlock = (item: any): item is TextBlock => {
@@ -309,38 +301,41 @@ export function ChatMessage({
     return item && typeof item.tool_use_id === 'string'
   }
 
-  const processMessageContent = (content: any): string => {
-    if (typeof content === 'string') {
-      return content;
-    }
+  // Memoizar o processamento do conteúdo para evitar recálculos desnecessários
+  const processedContent = React.useMemo(() => {
+    const processMessageContent = (content: any): string => {
+      if (typeof content === 'string') {
+        return content;
+      }
+      
+      if (Array.isArray(content)) {
+        return content.map((item) => {
+          // Compatibilidade com formato anterior
+          if (item.type === 'text') return item.text;
+          if (item.type === 'thinking') return `💭 ${item.thinking}`;
+          
+          // Novos tipos de bloco
+          if (isTextBlock(item)) return item.text;
+          if (isThinkingBlock(item)) return `💭 ${item.thinking}`;
+          if (isToolUseBlock(item)) return `🔧 Usando ${item.name}`;
+          if (isToolResultBlock(item)) return `📋 Resultado: ${item.content || 'N/A'}`;
+          
+          return JSON.stringify(item);
+        }).join('\n\n');
+      }
+      
+      // Compatibilidade com formato anterior
+      if (content.type === 'text') return content.text;
+      if (content.type === 'thinking') return `💭 ${content.thinking}`;
+      
+      return JSON.stringify(content, null, 2);
+    };
     
-    if (Array.isArray(content)) {
-      return content.map((item) => {
-        // Compatibilidade com formato anterior
-        if (item.type === 'text') return item.text;
-        if (item.type === 'thinking') return `💭 ${item.thinking}`;
-        
-        // Novos tipos de bloco
-        if (isTextBlock(item)) return item.text;
-        if (isThinkingBlock(item)) return `💭 ${item.thinking}`;
-        if (isToolUseBlock(item)) return `🔧 Usando ${item.name}`;
-        if (isToolResultBlock(item)) return `📋 Resultado: ${item.content || 'N/A'}`;
-        
-        return JSON.stringify(item);
-      }).join('\n\n');
-    }
-    
-    // Compatibilidade com formato anterior
-    if (content.type === 'text') return content.text;
-    if (content.type === 'thinking') return `💭 ${content.thinking}`;
-    
-    return JSON.stringify(content, null, 2);
-  };
+    return processMessageContent(content);
+  }, [content]);
 
-  const processedContent = processMessageContent(content);
-
-  // Função de cópia mais inteligente para diferentes tipos de conteúdo
-  const getContentForCopy = (): string => {
+  // Memoizar função de cópia para evitar recriação a cada render
+  const getContentForCopy = React.useCallback((): string => {
     if (typeof content === 'string') {
       return content;
     }
@@ -367,14 +362,14 @@ export function ChatMessage({
     }
     
     return processedContent;
-  };
+  }, [content, processedContent]);
 
-  const handleCopy = async () => {
+  const handleCopy = React.useCallback(async () => {
     const contentToCopy = getContentForCopy();
     await navigator.clipboard.writeText(contentToCopy)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
+  }, [getContentForCopy])
 
   const getIcon = () => {
     switch (role) {
@@ -397,7 +392,7 @@ export function ChatMessage({
     return icons[tool] || <Code className="h-4 w-4" />
   }
 
-  const renderContent = () => {
+  const renderContent = React.useMemo(() => {
     if (role === 'user') {
       return <p className="whitespace-pre-wrap">{processedContent}</p>
     }
@@ -409,29 +404,29 @@ export function ChatMessage({
           {content.map((item, index) => {
             // Compatibilidade com formato anterior
             if (item.type === 'text') {
-              return <TextBlockComponent key={index} block={{ text: item.text }} />
+              return <TextBlockComponent key={`text-${index}`} block={{ text: item.text }} />
             }
             if (item.type === 'thinking') {
-              return <ThinkingBlockComponent key={index} block={{ thinking: item.thinking, signature: '' }} />
+              return <ThinkingBlockComponent key={`thinking-${index}`} block={{ thinking: item.thinking, signature: '' }} />
             }
             
             // Novos tipos de bloco
             if (isTextBlock(item)) {
-              return <TextBlockComponent key={index} block={item} />
+              return <TextBlockComponent key={`textblock-${index}`} block={item} />
             }
             if (isThinkingBlock(item)) {
-              return <ThinkingBlockComponent key={index} block={item} />
+              return <ThinkingBlockComponent key={`thinkingblock-${index}`} block={item} />
             }
             if (isToolUseBlock(item)) {
-              return <ToolUseBlockComponent key={index} block={item} />
+              return <ToolUseBlockComponent key={`tooluse-${item.id || index}`} block={item} />
             }
             if (isToolResultBlock(item)) {
-              return <ToolResultBlockComponent key={index} block={item} />
+              return <ToolResultBlockComponent key={`toolresult-${item.tool_use_id || index}`} block={item} />
             }
             
             // Fallback para tipos desconhecidos
             return (
-              <div key={index} className="bg-muted p-3 rounded">
+              <div key={`unknown-${index}`} className="bg-muted p-3 rounded">
                 <pre className="text-sm">{JSON.stringify(item, null, 2)}</pre>
               </div>
             )
@@ -452,7 +447,7 @@ export function ChatMessage({
         dangerouslySetInnerHTML={{ __html: html }}
       />
     )
-  }
+  }, [role, content, processedContent])
 
   return (
     <div 
@@ -486,7 +481,14 @@ export function ChatMessage({
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
-                  {role === 'user' ? 'Você' : `Claude${sessionTitle ? ` • ${sessionTitle}` : sessionId && !sessionId.startsWith('temp-') && !sessionId.startsWith('project-') ? ` • ${sessionId.slice(-8)}` : ''}`}
+                  {role === 'user' ? 'Você' : (() => {
+                    const baseLabel = 'Claude';
+                    if (sessionTitle && sessionTitle !== sessionId) return `${baseLabel} • ${sessionTitle}`;
+                    if (sessionId && !sessionId.startsWith('temp-') && !sessionId.startsWith('project-')) {
+                      return `${baseLabel} • ${sessionId.slice(-8)}`;
+                    }
+                    return baseLabel;
+                  })()}
                   {sessionOrigin && sessionOrigin !== sessionId && (
                     <span className="ml-2 text-xs bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded">
                       {sessionTitle}
@@ -534,7 +536,7 @@ export function ChatMessage({
 
             {/* Content */}
             <div className="text-sm">
-              {renderContent()}
+              {renderContent}
             </div>
 
             {/* Footer with metrics */}

@@ -3,6 +3,7 @@ import { ChatMessage } from './ChatMessage'
 import { MessageInput } from './MessageInput'
 import { SessionTabs } from '../session/SessionTabs'
 import { SessionConfigModal } from '../session/SessionConfigModal'
+import { ProcessingIndicator } from '../../../components/ProcessingIndicator'
 import { Button } from '../ui/button'
 import { Card } from '../ui/card'
 import { 
@@ -30,6 +31,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     activeSessionId,
     isStreaming,
     streamingContent,
+    isProcessing,
     createSession,
     deleteSession,
     setActiveSession,
@@ -38,6 +40,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     setStreaming,
     setStreamingContent,
     appendStreamingContent,
+    setProcessing,
     updateMetrics,
     getActiveSession,
     clearSession,
@@ -48,29 +51,130 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
 
   const [showConfigModal, setShowConfigModal] = React.useState(false)
   const [api] = React.useState(() => new ChatAPI())
+  const [isTyping, setIsTyping] = React.useState(false)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
+  const typingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+  const typingQueueRef = React.useRef<string[]>([])
 
   const activeSession = getActiveSession()
   const sessionList = Array.from(sessions.values())
+
+  // Função para processar fila de digitação com efeito de typing
+  const processTypingQueue = React.useCallback(() => {
+    if (typingQueueRef.current.length === 0) {
+      setIsTyping(false)
+      return
+    }
+
+    setIsTyping(true)
+    const chunk = typingQueueRef.current.shift()!
+    const words = chunk.split(/(\s+)/)
+    
+    let wordIndex = 0
+    
+    const typeNextWord = () => {
+      if (wordIndex >= words.length) {
+        // Terminou este chunk, processa próximo
+        processTypingQueue()
+        return
+      }
+
+      const word = words[wordIndex]
+      appendStreamingContent(word)
+      wordIndex++
+
+      // Calcula delay baseado no tipo de palavra
+      let delay = Math.random() * 40 + 80 // 80-120ms base
+      
+      // Palavras técnicas/longas têm delay maior
+      if (word.length > 8 || /[{}()\[\]<>]/.test(word)) {
+        delay += 50
+      }
+      
+      // Pontuação tem pausa maior
+      if (/[.!?:;]/.test(word)) {
+        delay += 200
+      }
+      
+      // Espaços em branco são processados mais rapidamente
+      if (/^\s+$/.test(word)) {
+        delay = 20 // Espaços são "digitados" muito rapidamente
+      }
+      
+      // Code blocks têm ritmo diferente
+      if (word.includes('```') || word.includes('`')) {
+        delay += 100 // Pausa antes/depois de code blocks
+      }
+
+      typingTimeoutRef.current = setTimeout(typeNextWord, delay)
+    }
+
+    typeNextWord()
+  }, [])
+
+  // Adiciona chunk à fila de digitação
+  const addToTypingQueue = React.useCallback((content: string) => {
+    typingQueueRef.current.push(content)
+    
+    // Se não está digitando, inicia processo
+    if (!isTyping && typingQueueRef.current.length === 1) {
+      processTypingQueue()
+    }
+  }, [isTyping, processTypingQueue])
+
+  // Limpa fila de digitação (para interrupções)
+  const clearTypingQueue = React.useCallback(() => {
+    typingQueueRef.current = []
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = null
+    }
+    setIsTyping(false)
+  }, [])
+
+  // Aguarda finalização da digitação antes de executar callback
+  const waitForTypingToFinish = React.useCallback((callback?: () => void) => {
+    if (!isTyping && typingQueueRef.current.length === 0) {
+      // Não está digitando, executa imediatamente
+      callback?.()
+      return Promise.resolve()
+    }
+    
+    return new Promise<void>((resolve) => {
+      const checkTyping = () => {
+        if (!isTyping && typingQueueRef.current.length === 0) {
+          callback?.()
+          resolve()
+        } else {
+          // Verifica novamente em 50ms
+          setTimeout(checkTyping, 50)
+        }
+      }
+      checkTyping()
+    })
+  }, [isTyping])
 
   // Auto-scroll para última mensagem
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeSession?.messages, streamingContent])
 
+  // Cleanup da fila de digitação
+  React.useEffect(() => {
+    return () => {
+      clearTypingQueue()
+    }
+  }, [clearTypingQueue])
+
 
   // Carregar histórico da sessão se fornecido via props
   React.useEffect(() => {
-    console.log('🔍 ChatInterface recebeu sessionData:', sessionData);
     if (sessionData && sessionData.messages) {
-      console.log('📥 Carregando', sessionData.messages.length, 'mensagens');
       // Usa função do store para carregar sessão externa (resolve problema Immer)
       loadExternalSession(sessionData)
       
       // Carrega também histórico cruzado de outras sessões do projeto
       loadCrossSessionHistory(sessionData.id).then(() => {
-        console.log('🔗 Histórico cruzado carregado para sessão:', sessionData.id)
-        
         // Verifica se é continuação (1 arquivo) ou múltiplas sessões
         const sessionCount = sessions.size
         if (sessionCount === 1) {
@@ -88,10 +192,34 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
   // 🚀 AGUARDA PRIMEIRA MENSAGEM: Não cria sessões temporárias
   React.useEffect(() => {
     if (sessions.size === 0 && !sessionData) {
-      console.log('💬 Pronto para receber primeira mensagem...')
       // Não faz nada - aguarda usuário enviar primeira mensagem
     }
   }, [sessionData])
+
+  // 📨 RECUPERA MENSAGEM PRESERVADA APÓS REDIRECIONAMENTO
+  React.useEffect(() => {
+    const pendingMessage = sessionStorage.getItem('pendingMessage')
+    if (pendingMessage && activeSessionId && !activeSessionId.startsWith('project-') && !activeSessionId.startsWith('temp-')) {
+      // Edge case: Verifica se não está em streaming para evitar conflitos
+      if (!isStreaming) {
+        // Remove da sessionStorage
+        sessionStorage.removeItem('pendingMessage')
+        
+        // Aguarda um tick para garantir que o componente está totalmente carregado
+        setTimeout(() => {
+          handleSendMessage(pendingMessage)
+        }, 100)
+      } else {
+        // Se está em streaming, tenta novamente depois
+        setTimeout(() => {
+          if (!isStreaming) {
+            sessionStorage.removeItem('pendingMessage')
+            handleSendMessage(pendingMessage)
+          }
+        }, 1000)
+      }
+    }
+  }, [activeSessionId, isStreaming])
 
   const handleNewSession = (config?: SessionConfig) => {
     const sessionId = createSession(config)
@@ -102,16 +230,15 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
   const handleSendMessage = async (content: string) => {
     if (isStreaming) return
 
+    // 🚀 FLUXO SIMPLIFICADO - Sem redirecionamentos automáticos
+
     let currentSessionId = activeSessionId
     
     // Se não há sessão ativa, cria uma nova (será migrada para real automaticamente)
     if (!currentSessionId) {
-      console.log('💬 Primeira mensagem - criando sessão...')
       currentSessionId = createSession()
       setActiveSession(currentSessionId)
     }
-    
-    console.log(`🚀 Enviando mensagem - Sessão: ${currentSessionId}`)
     
     // Adiciona mensagem do usuário
     addMessage(currentSessionId, {
@@ -120,96 +247,96 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
       timestamp: new Date()
     })
 
+    // Limpa qualquer digitação em andamento
+    clearTypingQueue()
+    
     // Inicia streaming
     setStreaming(true)
     setStreamingContent('')
+    setProcessing(true)
 
     try {
       let currentContent = ''
       let tools: string[] = []
+      let isFirstTextChunk = true
 
       await api.sendMessage(
         content,
         (data) => {
           switch (data.type) {
+            case 'session_migrated':
+              // Processado automaticamente pelo sistema de migração existente
+              break
+              
+            case 'processing':
+              // Mantém indicador "Processando..." ativo
+              setProcessing(true)
+              break
+              
             case 'text_chunk':
             case 'assistant_text':
-              currentContent += data.content || ''
-              appendStreamingContent(data.content || '')
+              // Para o indicador "Processando..." no primeiro chunk de texto
+              if (isFirstTextChunk) {
+                setProcessing(false)
+                isFirstTextChunk = false
+              }
+              
+              // Adiciona à fila de digitação em vez de mostrar direto
+              if (data.content) {
+                addToTypingQueue(data.content)
+                currentContent += data.content
+              }
               break
             
             case 'tool_use':
               if (data.tool) {
                 tools.push(data.tool)
+                const toolMsg = `\n📦 Usando ferramenta: ${data.tool}\n`
+                addToTypingQueue(toolMsg)
+                currentContent += toolMsg
                 toast.info(`Usando ferramenta: ${data.tool}`)
               }
               break
+              
+            case 'tool_result':
+              // Processa resultados de ferramentas se necessário
+              break
             
             case 'result':
-              // 🔥 DEBUG COMPLETO DA MIGRAÇÃO
-              console.log('╔════════════════════════════════════════╗')
-              console.log('║     📊 RESULT RECEBIDO DO SDK          ║')
-              console.log('╚════════════════════════════════════════╝')
-              console.log(`├─ session_id do SDK: ${data.session_id}`)
-              console.log(`├─ currentSessionId: ${currentSessionId}`)
-              console.log(`├─ activeSessionId (store): ${activeSessionId}`)
-              console.log(`├─ É temporária? ${currentSessionId?.startsWith('temp-')}`)
-              console.log(`└─ Timestamp: ${new Date().toISOString()}`)
-              
               // MIGRAÇÃO IMEDIATA: SDK retornou session_id real
               if (data.session_id) {
                 // SEMPRE migra se a sessão atual é temporária
                 if (currentSessionId && currentSessionId.startsWith('temp-')) {
-                  console.log('\n🔄 INICIANDO MIGRAÇÃO DE SESSÃO TEMPORÁRIA')
-                  console.log(`   ├─ DE: ${currentSessionId}`)
-                  console.log(`   └─ PARA: ${data.session_id}`)
-                  
                   // Migração IMEDIATA sem validação desnecessária
-                  console.log('   📦 Executando migrateToRealSession()...')
                   migrateToRealSession(data.session_id)
                   
                   // Atualiza referência local
                   currentSessionId = data.session_id
-                  console.log(`   ✅ SessionId atualizado localmente: ${currentSessionId}`)
                   
                   // Aguarda um tick para garantir que o store foi atualizado
                   setTimeout(() => {
                     const updatedActiveSession = getActiveSession()
-                    console.log('   🔍 Verificando store após migração:')
-                    console.log(`      ├─ activeSession.id: ${updatedActiveSession?.id}`)
-                    console.log(`      └─ activeSession.title: ${updatedActiveSession?.title}`)
                     
                     // Força re-renderização se necessário
                     if (updatedActiveSession?.id !== data.session_id) {
-                      console.warn('   ⚠️ Store não atualizou! Forçando...')
                       setActiveSession(data.session_id)
                     }
                   }, 100)
                   
                   // Atualiza a URL imediatamente
                   const currentPath = window.location.pathname
-                  console.log(`   📍 Path atual: ${currentPath}`)
                   
                   if (currentPath === '/' || currentPath === '' || currentPath.includes('temp-')) {
                     const projectPath = '-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
                     const newUrl = `/${projectPath}/${data.session_id}`
-                    console.log(`   🚀 REDIRECIONANDO para: ${newUrl}`)
                     router.push(newUrl)
                     toast.success(`✅ Sessão real criada!`)
-                  } else {
-                    console.log(`   ℹ️ Mantendo URL atual: ${currentPath}`)
                   }
                 } else if (data.session_id !== currentSessionId) {
                   // Sessão já é real mas diferente - apenas atualiza
-                  console.log('\n📝 Atualizando referência de sessão real')
-                  console.log(`   ├─ DE: ${currentSessionId}`)
-                  console.log(`   └─ PARA: ${data.session_id}`)
                   currentSessionId = data.session_id
                 }
-              } else {
-                console.log('⚠️ SDK não retornou session_id!')
               }
-              console.log('╚════════════════════════════════════════╝\n')
               
               // Usa o sessionId correto (pode ter sido atualizado acima)
               const finalSessionId = data.session_id || currentSessionId || activeSessionId
@@ -241,27 +368,48 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
           }
         },
         (error) => {
-          toast.error(`Erro: ${error}`)
+          // Aguarda digitação terminar antes de mostrar erro
+          waitForTypingToFinish(() => {
+            toast.error(`Erro: ${error}`)
+            setProcessing(false)
+          })
         },
         () => {
-          setStreaming(false)
-          setStreamingContent('')
+          // Aguarda digitação terminar antes de finalizar streaming
+          waitForTypingToFinish(() => {
+            setStreaming(false)
+            setStreamingContent('')
+            setProcessing(false)
+          })
         }
       )
     } catch (error) {
-      toast.error('Erro ao enviar mensagem')
-      setStreaming(false)
-      setStreamingContent('')
+      // Aguarda digitação terminar antes de mostrar erro
+      waitForTypingToFinish(() => {
+        toast.error('Erro ao enviar mensagem')
+        setStreaming(false)
+        setStreamingContent('')
+        setProcessing(false)
+      })
     }
   }
 
   const handleInterrupt = async () => {
     try {
+      // Primeiro interrompe a digitação
+      clearTypingQueue()
+      
       await api.interruptSession()
       setStreaming(false)
       setStreamingContent('')
+      setProcessing(false)
       toast.info('Resposta interrompida')
     } catch (error) {
+      // Mesmo se houver erro na interrupção da API, limpa os estados locais
+      clearTypingQueue()
+      setStreaming(false)
+      setStreamingContent('')
+      setProcessing(false)
       toast.error('Erro ao interromper')
     }
   }
@@ -297,6 +445,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
   return (
     <div className="flex h-screen flex-col bg-background">
       <Toaster position="top-right" />
+      
       
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -348,6 +497,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
         />
       </header>
 
+
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Chat Area */}
@@ -379,6 +529,17 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
                   sessionOrigin={(message as any).sessionOrigin}
                 />
               ))}
+              
+              {isProcessing && !streamingContent && (
+                <div className="flex items-center justify-start mb-6">
+                  <div className="flex gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                      <Bot className="h-5 w-5" />
+                    </div>
+                    <ProcessingIndicator message="🔄 Processando Resposta..." />
+                  </div>
+                </div>
+              )}
               
               {isStreaming && streamingContent && (
                 <ChatMessage
@@ -441,6 +602,7 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
             isStreaming={isStreaming}
             disabled={!activeSessionId}
             sessionId={activeSession?.id}
+            sessionTitle={activeSession?.title}
             isFirstMessage={activeSession?.messages.length === 0}
           />
         </div>

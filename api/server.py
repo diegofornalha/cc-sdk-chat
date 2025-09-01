@@ -817,6 +817,151 @@ async def get_real_sessions():
         "message": f"Encontradas {len(real_sessions)} sessões reais no sistema"
     }
 
+@app.get(
+    "/api/discover-projects",
+    tags=["Projetos"],
+    summary="Descobrir Todos os Projetos",
+    description="Descobre automaticamente todos os projetos Claude Code disponíveis",
+    response_description="Lista de projetos com estatísticas"
+)
+async def discover_projects():
+    """Descobre todos os projetos Claude Code no sistema."""
+    import json
+    from pathlib import Path
+    
+    claude_projects = Path.home() / ".claude" / "projects"
+    
+    if not claude_projects.exists():
+        return {"projects": [], "count": 0, "error": "Diretório ~/.claude/projects/ não encontrado"}
+    
+    projects = []
+    
+    for project_dir in claude_projects.iterdir():
+        if project_dir.is_dir():
+            jsonl_files = list(project_dir.glob("*.jsonl"))
+            
+            if jsonl_files:
+                # Calcula estatísticas do projeto
+                total_messages = 0
+                total_sessions = len(jsonl_files)
+                last_activity = None
+                
+                for jsonl_file in jsonl_files:
+                    try:
+                        # Lê primeira e última linha para estatísticas básicas
+                        with open(jsonl_file, 'r', encoding='utf-8') as f:
+                            lines = f.readlines()
+                            total_messages += len(lines)
+                            
+                            # Pega timestamp da última linha
+                            if lines:
+                                try:
+                                    last_line = json.loads(lines[-1])
+                                    if 'timestamp' in last_line:
+                                        file_time = last_line['timestamp']
+                                        if not last_activity or file_time > last_activity:
+                                            last_activity = file_time
+                                except:
+                                    pass
+                    except:
+                        continue
+                
+                projects.append({
+                    "name": project_dir.name,
+                    "path": str(project_dir),
+                    "sessions_count": total_sessions,
+                    "total_messages": total_messages,
+                    "last_activity": last_activity,
+                    "url_path": project_dir.name
+                })
+    
+    # Ordena por última atividade
+    projects.sort(key=lambda p: p['last_activity'] or '', reverse=True)
+    
+    return {
+        "projects": projects,
+        "count": len(projects),
+        "message": f"Encontrados {len(projects)} projetos Claude Code"
+    }
+
+@app.get(
+    "/api/web-sessions",
+    tags=["Sessões"],
+    summary="Listar Sessões Web",
+    description="Lista apenas sessões criadas via SDK Web (não Terminal)",
+    response_description="Lista de sessões Web com estatísticas"
+)
+async def get_web_sessions():
+    """Lista apenas sessões criadas via interface Web."""
+    import json
+    from pathlib import Path
+    
+    claude_projects = Path.home() / ".claude" / "projects"
+    
+    if not claude_projects.exists():
+        return {"sessions": [], "count": 0, "error": "Diretório ~/.claude/projects/ não encontrado"}
+    
+    web_sessions = []
+    
+    for project_dir in claude_projects.iterdir():
+        if project_dir.is_dir():
+            for jsonl_file in project_dir.glob("*.jsonl"):
+                try:
+                    with open(jsonl_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                        
+                    if not lines:
+                        continue
+                        
+                    # Verifica se é sessão Web (não Terminal)
+                    is_web_session = False
+                    total_messages = len(lines)
+                    first_message = None
+                    last_message = None
+                    
+                    for line in lines:
+                        try:
+                            data = json.loads(line)
+                            
+                            # Detecta origem Web
+                            if (data.get('type') == 'summary' or 
+                                data.get('userType') != 'external'):
+                                is_web_session = True
+                            
+                            # Pega primeira mensagem
+                            if data.get('type') in ['user', 'assistant'] and not first_message:
+                                first_message = data.get('timestamp')
+                            
+                            # Atualiza última mensagem
+                            if data.get('timestamp'):
+                                last_message = data.get('timestamp')
+                                
+                        except:
+                            continue
+                    
+                    if is_web_session:
+                        session_id = jsonl_file.stem
+                        web_sessions.append({
+                            "id": session_id,
+                            "project": project_dir.name,
+                            "total_messages": total_messages,
+                            "first_message": first_message,
+                            "last_activity": last_message,
+                            "url": f"/{project_dir.name}/{session_id}"
+                        })
+                        
+                except Exception as e:
+                    continue
+    
+    # Ordena por última atividade
+    web_sessions.sort(key=lambda s: s['last_activity'] or '', reverse=True)
+    
+    return {
+        "sessions": web_sessions,
+        "count": len(web_sessions),
+        "message": f"Encontradas {len(web_sessions)} sessões Web"
+    }
+
 @app.post(
     "/api/load-project-history",
     tags=["Sessões"],
