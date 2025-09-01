@@ -33,7 +33,7 @@ export function MessageInput({
   const isTerminalTab = React.useMemo(() => {
     return (
       sessionId?.startsWith('project-') ||
-      sessionTitle?.includes('Projeto Completo') ||
+      sessionTitle?.includes('Timeline Unificada') ||
       sessionTitle?.includes('Terminal') ||
       sessionTitle?.includes('sessões')
     )

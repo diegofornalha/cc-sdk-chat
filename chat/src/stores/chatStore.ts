@@ -447,7 +447,7 @@ const useChatStore = create<ChatStore>()(
           // Cria sessão unificada com timeline completa
           const unifiedSession: Session = {
             id: unifiedSessionId,
-            title: `📋 Projeto Completo (${sessions.length} sessões)`,
+            title: `📋 Timeline Unificada (${sessions.length} sessões)`,
             messages: allMessages,
             config: {
               systemPrompt: `Timeline unificada do projeto - ${sessions.length} sessões combinadas`,

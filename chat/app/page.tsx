@@ -136,7 +136,7 @@ export default function Home() {
                 <Card 
                   key={project.name}
                   className="p-6 transition-all hover:shadow-lg cursor-pointer"
-                  onClick={() => router.push(`/${project.url_path}/timeline-unificada`)}
+                  onClick={() => router.push(`/${project.url_path}?tab=overview`)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -182,7 +182,7 @@ export default function Home() {
                       className="w-full"
                       onClick={(e) => {
                         e.stopPropagation();
-                        router.push(`/${project.url_path}/timeline-unificada`);
+                        router.push(`/${project.url_path}?tab=overview`);
                       }}
                     >
                       Ver Sessões
