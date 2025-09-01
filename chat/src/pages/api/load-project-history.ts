@@ -91,7 +91,7 @@ export default async function handler(
                 // Determina origem baseado no tipo de conversa
                 if (!origin) {
                   if (data.type === 'summary') {
-                    origin = 'SDK Web'
+                    origin = 'Terminal' // Summary também é do Terminal
                   } else if (data.userType === 'external') {
                     origin = 'Terminal'
                   }

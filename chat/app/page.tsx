@@ -16,30 +16,39 @@ interface WebSession {
   url: string;
 }
 
+interface ClaudeCodeProject {
+  name: string;
+  path: string;
+  sessions_count: number;
+  total_messages: number;
+  last_activity: string;
+  url_path: string;
+}
+
 export default function Home() {
   const router = useRouter();
   const [sessions, setSessions] = React.useState<WebSession[]>([]);
+  const [projects, setProjects] = React.useState<ClaudeCodeProject[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const loadWebSessions = async () => {
+    const loadClaudeCodeProjects = async () => {
       try {
-        const response = await fetch('http://localhost:8992/api/web-sessions');
+        // Carregar apenas projetos Claude Code SDK
+        const response = await fetch('http://localhost:8992/api/discover-projects');
         const data = await response.json();
         
-        if (data.sessions) {
-          setSessions(data.sessions);
-          toast.success(`💬 ${data.count} sessões Web encontradas`);
-        }
+        setProjects(data.projects || []);
+        toast.success(`🤖 ${data.count || 0} projetos Claude Code SDK encontrados`);
       } catch (error) {
-        console.error('Erro ao carregar sessões Web:', error);
-        toast.error('Erro ao carregar sessões');
+        console.error('Erro ao carregar projetos Claude Code SDK:', error);
+        toast.error('Erro ao carregar projetos');
       } finally {
         setLoading(false);
       }
     };
 
-    loadWebSessions();
+    loadClaudeCodeProjects();
   }, []);
 
   const formatProjectName = (name: string) => {
@@ -92,9 +101,9 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <Bot className="h-8 w-8 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold">Suas Conversas Web</h1>
+              <h1 className="text-2xl font-bold">Suas Sessões Oficiais</h1>
               <p className="text-sm text-muted-foreground">
-                Todas as suas conversas criadas via interface Web
+                Todas as suas conversas do Claude Code SDK
               </p>
             </div>
           </div>
@@ -103,46 +112,54 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        {sessions.length === 0 ? (
+        {projects.length === 0 ? (
           <Card className="p-12 text-center">
-            <MessageSquare className="mx-auto h-16 w-16 text-muted-foreground" />
-            <h2 className="mt-6 text-xl font-medium">Nenhuma conversa Web encontrada</h2>
+            <Bot className="mx-auto h-16 w-16 text-muted-foreground" />
+            <h2 className="mt-6 text-xl font-medium">Nenhum projeto Claude Code SDK encontrado</h2>
             <p className="mt-2 text-muted-foreground">
-              Crie uma nova conversa para começar
+              Crie uma sessão no Claude Code CLI para começar
             </p>
-            <Button 
-              className="mt-4"
-              onClick={() => router.push('/new')}
-            >
-              Nova Conversa Web
-            </Button>
           </Card>
         ) : (
           <>
             <div className="mb-6">
               <h2 className="text-xl font-semibold">
-                Suas Conversas ({sessions.length})
+                Seus Projetos ({projects.length})
               </h2>
               <p className="text-sm text-muted-foreground">
-                Clique em uma conversa para continuar
+                Clique em um projeto para ver as sessões
               </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {sessions.map((session) => (
+              {projects.map((project) => (
                 <Card 
-                  key={session.id}
+                  key={project.name}
                   className="p-6 transition-all hover:shadow-lg cursor-pointer"
-                  onClick={() => router.push(session.url)}
+                  onClick={() => router.push(`/${project.url_path}/timeline-unificada`)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="font-medium text-lg">
-                        💬 Conversa {session.id.slice(-8)}
+                        🤖 {formatProjectName(project.name)}
                       </h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {session.project.replace(/-/g, ' ')}
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                          Claude Code SDK
+                        </span>
+                        {project.name.includes('-claude-api-claude-code-app') ? (
+                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                            🚀 Projeto
+                          </span>
+                        ) : project.name === '-home-suthub--claude' ? (
+                          <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+                            🏠 Terminal
+                          </span>
+                        ) : null}
+                        <span className="text-xs text-muted-foreground">
+                          {project.sessions_count} sessão{project.sessions_count > 1 ? 'ões' : ''}
+                        </span>
+                      </div>
                     </div>
                     <ExternalLink className="h-5 w-5 text-muted-foreground" />
                   </div>
@@ -150,12 +167,12 @@ export default function Home() {
                   <div className="mt-4 space-y-2">
                     <div className="flex items-center gap-2 text-sm">
                       <MessageSquare className="h-4 w-4 text-blue-500" />
-                      <span>{session.total_messages} mensagens</span>
+                      <span>{project.total_messages} mensagens</span>
                     </div>
                     
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Clock className="h-4 w-4" />
-                      <span>Última atividade: {formatLastActivity(session.last_activity)}</span>
+                      <span>Última atividade: {formatLastActivity(project.last_activity)}</span>
                     </div>
                   </div>
 
@@ -165,10 +182,10 @@ export default function Home() {
                       className="w-full"
                       onClick={(e) => {
                         e.stopPropagation();
-                        router.push(session.url);
+                        router.push(`/${project.url_path}/timeline-unificada`);
                       }}
                     >
-                      Abrir Conversa
+                      Ver Sessões
                     </Button>
                   </div>
                 </Card>

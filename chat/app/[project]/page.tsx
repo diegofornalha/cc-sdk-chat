@@ -96,21 +96,25 @@ export default function ProjectDashboardPage() {
       allMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
       setUnifiedMessages(allMessages);
 
+      // Ordena sessões por data de primeira mensagem (ordem cronológica)
+      const sortedSessions = sessionsData.sort((a: ProjectSession, b: ProjectSession) => {
+        return new Date(a.first_message_time).getTime() - new Date(b.first_message_time).getTime();
+      });
+
       // Carrega sessões no store para navegação
-      sessionsData.forEach((sessionData: ProjectSession) => {
+      sortedSessions.forEach((sessionData: ProjectSession) => {
         loadExternalSession({
           id: sessionData.id,
           messages: sessionData.messages,
           origin: sessionData.origin
         });
       });
+      
+      setProjectSessions(sortedSessions);
 
-      // Define aba inicial baseada no número de sessões
-      if (sessionsData.length === 1) {
-        setActiveTab(sessionsData[0].id);
-      } else {
-        setActiveTab('overview');
-      }
+      // Sempre mostra o overview primeiro (Timeline Unificada)
+      // Usuário pode navegar para sessões específicas clicando nas abas
+      setActiveTab('overview');
 
       toast.success(`📊 Dashboard carregado: ${sessionsData.length} sessões`);
     } catch (error) {
@@ -121,9 +125,35 @@ export default function ProjectDashboardPage() {
     }
   };
 
+  const getSessionSlug = (session: ProjectSession, index: number) => {
+    const firstMessage = session.messages?.[0]?.content;
+    
+    // Se é a primeira sessão (index 0), é a original
+    if (index === 0) {
+      return `terminal-${session.id.slice(-8)}`;
+    }
+    
+    // Para outras sessões, detecta se referencia a sessão original
+    if (firstMessage?.includes('05d20033') || firstMessage?.includes('Sessão:')) {
+      return 'terminal-05d20033';
+    }
+    
+    return `terminal-${session.id.slice(-8)}`;
+  };
+
   const handleSessionClick = (sessionId: string) => {
-    const newUrl = `/${projectName}/${sessionId}`;
-    router.push(newUrl);
+    const session = projectSessions.find(s => s.id === sessionId);
+    const index = projectSessions.findIndex(s => s.id === sessionId);
+    
+    if (session && index !== -1) {
+      const slug = getSessionSlug(session, index);
+      const newUrl = `/${projectName}/${slug}`;
+      router.push(newUrl);
+    } else {
+      // Fallback para UUID se não encontrar
+      const newUrl = `/${projectName}/${sessionId}`;
+      router.push(newUrl);
+    }
   };
 
   const calculateTotalStats = () => {
@@ -137,7 +167,26 @@ export default function ProjectDashboardPage() {
   const getSessionIcon = (origin: string) => {
     if (origin?.includes('Terminal') || origin?.includes('SDK')) return Terminal;
     if (origin?.includes('Web')) return Globe;
-    return Bot;
+    return Terminal; // Default para sessões de terminal
+  };
+
+  const getSessionTitle = (session: ProjectSession, index: number) => {
+    // Para sessões do projeto -home-suthub--claude, todas são do Terminal
+    // Vamos identificar pela origem/contexto
+    
+    const firstMessage = session.messages?.[0]?.content;
+    
+    // Se é a primeira sessão (index 0), é a original
+    if (index === 0) {
+      return `terminal-${session.id.slice(-8)}`;
+    }
+    
+    // Para outras sessões, detecta se referencia a sessão original
+    if (firstMessage?.includes('05d20033') || firstMessage?.includes('Sessão:')) {
+      return 'terminal-05d20033';
+    }
+    
+    return `terminal-${session.id.slice(-8)}`;
   };
 
   if (isLoading) {
@@ -188,7 +237,6 @@ export default function ProjectDashboardPage() {
           <div className="flex items-center gap-2">
             <div className="text-right text-sm">
               <div className="font-medium">{totalStats.tokens.toLocaleString()} tokens</div>
-              <div className="text-muted-foreground">{formatCost(totalStats.cost)}</div>
             </div>
           </div>
         </div>
@@ -199,8 +247,12 @@ export default function ProjectDashboardPage() {
             Início
           </span>
           <ArrowRight className="inline h-3 w-3 mx-2" />
-          <span className="text-foreground font-medium">
+          <span className="hover:text-foreground cursor-pointer" onClick={() => router.push('/')}>
             {projectName.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+          </span>
+          <ArrowRight className="inline h-3 w-3 mx-2" />
+          <span className="text-foreground font-medium">
+            Timeline Unificada
           </span>
         </div>
       </header>
@@ -216,11 +268,11 @@ export default function ProjectDashboardPage() {
                 className="flex items-center gap-2"
               >
                 <Activity className="h-4 w-4" />
-                📋 Projeto Completo
+                📋 Timeline Unificada
               </TabsTrigger>
               
               {/* Abas das sessões individuais */}
-              {projectSessions.map((session) => {
+              {projectSessions.map((session, index) => {
                 const Icon = getSessionIcon(session.origin);
                 return (
                   <TabsTrigger 
@@ -228,8 +280,11 @@ export default function ProjectDashboardPage() {
                     value={session.id}
                     className="flex items-center gap-2"
                   >
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-muted rounded text-xs font-medium">
+                      #{index + 1}
+                    </span>
                     <Icon className="h-4 w-4" />
-                    {session.title || `${session.origin} (${session.id.slice(-8)})`}
+                    {getSessionTitle(session, index)}
                   </TabsTrigger>
                 );
               })}
@@ -268,10 +323,20 @@ export default function ProjectDashboardPage() {
 
                     <Card className="p-3">
                       <div className="flex items-center gap-2 mb-2">
-                        <DollarSign className="h-4 w-4 text-yellow-500" />
-                        <span className="text-sm font-medium">Custo Total</span>
+                        <Clock className="h-4 w-4 text-purple-500" />
+                        <span className="text-sm font-medium">Atividade</span>
                       </div>
-                      <div className="text-2xl font-bold">{formatCost(totalStats.cost)}</div>
+                      <div className="text-sm">
+                        <div className="font-medium">Hoje: {
+                          projectSessions.filter(s => {
+                            const today = new Date().toDateString();
+                            return new Date(s.last_message_time).toDateString() === today;
+                          }).length
+                        }</div>
+                        <div className="text-muted-foreground">Média: {
+                          Math.round(totalStats.messages / projectSessions.length)
+                        } msgs/sessão</div>
+                      </div>
                     </Card>
 
                     {/* Lista de sessões */}
@@ -280,7 +345,7 @@ export default function ProjectDashboardPage() {
                         <Calendar className="h-4 w-4" />
                         Sessões ({projectSessions.length})
                       </h4>
-                      {projectSessions.map((session) => {
+                      {projectSessions.map((session, index) => {
                         const Icon = getSessionIcon(session.origin);
                         return (
                           <Card 
@@ -289,13 +354,16 @@ export default function ProjectDashboardPage() {
                             onClick={() => handleSessionClick(session.id)}
                           >
                             <div className="flex items-center gap-2 mb-1">
+                              <span className="flex items-center justify-center w-5 h-5 bg-primary/10 text-primary rounded-full text-xs font-bold">
+                                {index + 1}
+                              </span>
                               <Icon className="h-3 w-3" />
                               <span className="text-xs font-medium">
-                                {session.origin}
+                                {getSessionTitle(session, index)}
                               </span>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {session.total_messages} msgs • {formatCost(session.total_cost)}
+                              {session.total_messages} mensagens
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {new Date(session.last_message_time).toLocaleDateString('pt-BR')}
@@ -374,10 +442,6 @@ export default function ProjectDashboardPage() {
                           <div className="font-medium">{session.total_tokens.toLocaleString()}</div>
                         </div>
                         <div>
-                          <div className="text-muted-foreground">Custo</div>
-                          <div className="font-medium">{formatCost(session.total_cost)}</div>
-                        </div>
-                        <div>
                           <div className="text-muted-foreground">Duração</div>
                           <div className="font-medium">
                             {(() => {
@@ -422,7 +486,7 @@ export default function ProjectDashboardPage() {
                           {session.origin} • {session.id.slice(-8)}
                         </h2>
                         <p className="text-sm text-muted-foreground">
-                          {session.total_messages} mensagens • {session.total_tokens.toLocaleString()} tokens • {formatCost(session.total_cost)}
+                          {session.total_messages} mensagens • {session.total_tokens.toLocaleString()} tokens
                         </p>
                       </div>
 
