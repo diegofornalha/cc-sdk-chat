@@ -1,5 +1,6 @@
 import React from 'react'
 import { marked } from 'marked'
+import DOMPurify from 'isomorphic-dompurify'
 import { cn } from '@/lib/utils'
 
 interface TextBlockProps {
@@ -22,7 +23,7 @@ export function TextBlock({ content, className }: TextBlockProps) {
         "text-sm leading-relaxed",
         className
       )}
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
     />
   )
 }

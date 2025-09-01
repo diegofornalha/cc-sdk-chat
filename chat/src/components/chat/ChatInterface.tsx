@@ -141,15 +141,22 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     }
     
     return new Promise<void>((resolve) => {
+      let timeoutId: NodeJS.Timeout | null = null
+      
       const checkTyping = () => {
         if (!isTyping && typingQueueRef.current.length === 0) {
+          if (timeoutId) {
+            clearTimeout(timeoutId)
+            timeoutId = null
+          }
           callback?.()
           resolve()
         } else {
           // Verifica novamente em 50ms
-          setTimeout(checkTyping, 50)
+          timeoutId = setTimeout(checkTyping, 50)
         }
       }
+      
       checkTyping()
     })
   }, [isTyping])
@@ -159,12 +166,22 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeSession?.messages, streamingContent])
 
-  // Cleanup da fila de digitação
+  // Cleanup da fila de digitação e timeouts
   React.useEffect(() => {
     return () => {
+      // Limpa fila de digitação
       clearTypingQueue()
+      
+      // Garante limpeza do timeout principal mesmo se clearTypingQueue falhar
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+        typingTimeoutRef.current = null
+      }
+      
+      // Limpa fila residual
+      typingQueueRef.current = []
     }
-  }, [clearTypingQueue])
+  }, [])
 
 
   // Carregar histórico da sessão se fornecido via props

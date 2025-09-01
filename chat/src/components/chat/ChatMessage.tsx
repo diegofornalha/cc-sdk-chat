@@ -1,5 +1,6 @@
 import React from 'react'
 import { marked } from 'marked'
+import DOMPurify from 'isomorphic-dompurify'
 import { Copy, Check, User, Bot, Code, Terminal, FileText, Brain, Wrench } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Card } from '../ui/card'
@@ -39,7 +40,7 @@ const TextBlockComponent: React.FC<{ block: TextBlock }> = React.memo(({ block }
   return (
     <div 
       className="markdown-content prose prose-sm dark:prose-invert max-w-none"
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
     />
   )
 })
@@ -444,7 +445,7 @@ export function ChatMessage({
     return (
       <div 
         className="markdown-content prose prose-sm dark:prose-invert max-w-none"
-        dangerouslySetInnerHTML={{ __html: html }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
       />
     )
   }, [role, content, processedContent])
