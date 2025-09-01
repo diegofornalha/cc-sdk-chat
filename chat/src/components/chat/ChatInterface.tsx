@@ -4,6 +4,9 @@ import { MessageInput } from './MessageInput'
 import { SessionTabs } from '../session/SessionTabs'
 import { SessionConfigModal } from '../session/SessionConfigModal'
 import { ProcessingIndicator } from '../../../components/ProcessingIndicator'
+import { ChatErrorBoundary } from '../error/ChatErrorBoundary'
+import SessionErrorBoundary from '../error/SessionErrorBoundary'
+import { useSessionRecovery } from '@/hooks/useSessionRecovery'
 import { Button } from '../ui/button'
 import { Card } from '../ui/card'
 import { 
@@ -48,6 +51,12 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     loadCrossSessionHistory,
     migrateToRealSession
   } = useChatStore()
+
+  const { 
+    cleanupCorruptedSession, 
+    recoverSession, 
+    createReplacementSession 
+  } = useSessionRecovery()
 
   const [showConfigModal, setShowConfigModal] = React.useState(false)
   const [api] = React.useState(() => new ChatAPI())
@@ -182,6 +191,50 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
       typingQueueRef.current = []
     }
   }, [])
+
+  // Event listener para recovery de streaming
+  React.useEffect(() => {
+    const handleChatInterrupt = () => {
+      console.log('🚨 Chat interrupt event received');
+      clearTypingQueue()
+      setStreaming(false)
+      setStreamingContent('')
+      setProcessing(false)
+    }
+
+    const handleStreamingError = (event: any) => {
+      console.log('🚨 Streaming error event received:', event.detail);
+      if (isStreaming) {
+        clearTypingQueue()
+        setStreaming(false)
+        setStreamingContent('')
+        setProcessing(false)
+        toast.error('Erro no streaming - Estados limpos')
+      }
+    }
+
+    const handleStreamingRecovery = () => {
+      console.log('♻️ Streaming recovery event received');
+      // Força limpeza completa dos estados
+      handleChatErrorRecovery()
+    }
+
+    // Registra event listeners
+    window.addEventListener('chat-interrupt', handleChatInterrupt)
+    window.addEventListener('streaming-error', handleStreamingError)
+    window.addEventListener('streaming-recovery', handleStreamingRecovery)
+
+    // Guarda timers para limpeza global
+    if (!(window as any).__chatTimers) {
+      (window as any).__chatTimers = []
+    }
+
+    return () => {
+      window.removeEventListener('chat-interrupt', handleChatInterrupt)
+      window.removeEventListener('streaming-error', handleStreamingError)
+      window.removeEventListener('streaming-recovery', handleStreamingRecovery)
+    }
+  }, [isStreaming])
 
 
   // Carregar histórico da sessão se fornecido via props
@@ -459,6 +512,78 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
     toast.success('Sessão exportada')
   }
 
+  // Funções de recovery para ChatErrorBoundary
+  const handleChatErrorRecovery = () => {
+    // Limpa estados que podem estar corrompidos
+    clearTypingQueue()
+    setStreaming(false)
+    setStreamingContent('')
+    setProcessing(false)
+    
+    // Força re-renderização do componente
+    if (activeSessionId) {
+      const currentSession = getActiveSession()
+      if (currentSession) {
+        setActiveSession(activeSessionId)
+      }
+    }
+    
+    toast.info('♻️ Chat recuperado - Estados limpos')
+  }
+
+  const handlePreserveSession = () => {
+    if (!activeSession) return
+    
+    try {
+      // Cria backup da sessão atual
+      const backupData = {
+        ...activeSession,
+        backupTimestamp: Date.now(),
+        isStreaming,
+        streamingContent,
+        url: window.location.href
+      }
+      
+      const backupKey = `chat_session_backup_${activeSession.id}`
+      localStorage.setItem(backupKey, JSON.stringify(backupData))
+      
+      // Também exporta automaticamente
+      const dataStr = JSON.stringify(backupData, null, 2)
+      const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr)
+      const exportFileDefaultName = `chat-backup-${activeSession.id}-${Date.now()}.json`
+      
+      const linkElement = document.createElement('a')
+      linkElement.setAttribute('href', dataUri)
+      linkElement.setAttribute('download', exportFileDefaultName)
+      linkElement.click()
+      
+      toast.success('💾 Sessão preservada e exportada!')
+    } catch (error) {
+      console.error('Erro ao preservar sessão:', error)
+      toast.error('Erro ao preservar sessão')
+    }
+  }
+
+  // Handlers específicos para SessionErrorBoundary da sessão ativa
+  const handleActiveSessionCleanup = React.useCallback((sessionId: string) => {
+    console.log(`🧹 Interface executando cleanup da sessão ativa: ${sessionId}`);
+    cleanupCorruptedSession(sessionId);
+  }, [cleanupCorruptedSession]);
+
+  const handleActiveSessionRecovery = React.useCallback((sessionId: string) => {
+    console.log(`🔄 Interface executando recuperação da sessão ativa: ${sessionId}`);
+    return recoverSession(sessionId);
+  }, [recoverSession]);
+
+  const handleCreateNewSessionAfterError = React.useCallback(() => {
+    console.log(`➕ Interface criando nova sessão após erro`);
+    const newSessionId = createReplacementSession();
+    if (newSessionId) {
+      setActiveSession(newSessionId);
+      toast.success('Nova sessão criada após erro');
+    }
+  }, [createReplacementSession, setActiveSession]);
+
   return (
     <div className="flex h-screen flex-col bg-background">
       <Toaster position="top-right" />
@@ -537,11 +662,24 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
 
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Chat Area */}
-        <div className="flex flex-1 flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-6">
-            <div className="mx-auto max-w-4xl">
+        {/* Chat Area - Protegida por ChatErrorBoundary */}
+        <ChatErrorBoundary 
+          sessionId={activeSessionId}
+          onErrorRecovery={handleChatErrorRecovery}
+          onPreserveSession={handlePreserveSession}
+        >
+          <div className="flex flex-1 flex-col">
+          {/* Messages - Protegida por SessionErrorBoundary específica */}
+          {activeSession ? (
+            <SessionErrorBoundary
+              sessionId={activeSession.id}
+              sessionTitle={activeSession.title}
+              onSessionCleanup={handleActiveSessionCleanup}
+              onSessionRecovery={handleActiveSessionRecovery}
+              onCreateNewSession={handleCreateNewSessionAfterError}
+            >
+              <div className="flex-1 overflow-y-auto px-4 py-6">
+                <div className="mx-auto max-w-4xl">
               {activeSession?.messages.length === 0 && !isStreaming && (
                 <Card className="p-8 text-center">
                   <Bot className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -589,8 +727,22 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
               )}
               
               <div ref={messagesEndRef} />
+                </div>
+              </div>
+            </SessionErrorBoundary>
+          ) : (
+            <div className="flex-1 overflow-y-auto px-4 py-6">
+              <div className="mx-auto max-w-4xl">
+                <Card className="p-8 text-center">
+                  <Bot className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h2 className="mt-4 text-lg font-medium">Nenhuma sessão ativa</h2>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Crie uma nova sessão para começar
+                  </p>
+                </Card>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Session Actions */}
           {activeSession && (
@@ -641,7 +793,8 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
             sessionTitle={activeSession?.title}
             isFirstMessage={activeSession?.messages.length === 0}
           />
-        </div>
+          </div>
+        </ChatErrorBoundary>
       </div>
 
       {/* Session Config Modal */}

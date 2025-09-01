@@ -4,6 +4,7 @@ import { Button } from '../ui/button'
 import { Plus, X, MessageSquare, BarChart3 } from 'lucide-react'
 import { Session } from '@/stores/chatStore'
 import { cn } from '@/lib/utils'
+import SessionWrapper from './SessionWrapper'
 
 interface SessionTabsProps {
   sessions: Session[]
@@ -27,36 +28,41 @@ export function SessionTabs({
       <div className="flex-1 overflow-x-auto">
         <div className="flex items-center gap-1">
           {sessions.map((session) => (
-            <div
-              key={session.id}
-              className={cn(
-                "group flex items-center gap-2 rounded-lg px-3 py-1.5",
-                "border bg-background transition-all",
-                "hover:bg-accent hover:text-accent-foreground",
-                "cursor-pointer",
-                activeSessionId === session.id && "bg-primary text-primary-foreground"
-              )}
-              onClick={() => onSessionSelect(session.id)}
+            <SessionWrapper 
+              key={session.id} 
+              session={session}
+              isActive={activeSessionId === session.id}
             >
-              <MessageSquare className="h-4 w-4" />
-              <span className="max-w-[150px] truncate text-sm">
-                {session.title}
-              </span>
-              <span className="text-xs opacity-60">
-                ({session.messages.length})
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onSessionClose(session.id)
-                }}
+              <div
+                className={cn(
+                  "group flex items-center gap-2 rounded-lg px-3 py-1.5",
+                  "border bg-background transition-all",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  "cursor-pointer",
+                  activeSessionId === session.id && "bg-primary text-primary-foreground"
+                )}
+                onClick={() => onSessionSelect(session.id)}
               >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
+                <MessageSquare className="h-4 w-4" />
+                <span className="max-w-[150px] truncate text-sm">
+                  {session.title}
+                </span>
+                <span className="text-xs opacity-60">
+                  ({session.messages.length})
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSessionClose(session.id)
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </SessionWrapper>
           ))}
         </div>
       </div>

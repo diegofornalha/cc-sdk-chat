@@ -4,6 +4,7 @@ import React from 'react';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
 import { ReactNode } from 'react';
+import { GlobalErrorBoundary } from '@/components/error/GlobalErrorBoundary';
 
 interface ProvidersProps {
   children: ReactNode;
@@ -11,14 +12,16 @@ interface ProvidersProps {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-      <Toaster 
-        position="top-right" 
-        richColors
-        closeButton
-        expand={false}
-      />
-      {children}
-    </ThemeProvider>
+    <GlobalErrorBoundary>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+        <Toaster 
+          position="top-right" 
+          richColors
+          closeButton
+          expand={false}
+        />
+        {children}
+      </ThemeProvider>
+    </GlobalErrorBoundary>
   );
 } 
