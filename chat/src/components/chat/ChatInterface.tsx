@@ -452,7 +452,17 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <Bot className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-semibold">Claude Chat</h1>
+            <div className="flex flex-col">
+              <h1 className="text-xl font-semibold">Claude Chat</h1>
+              {sessionData && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                    Claude Code SDK
+                  </span>
+                  <span>Sessão Oficial</span>
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="flex items-center gap-2">
