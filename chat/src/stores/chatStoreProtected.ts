@@ -754,13 +754,13 @@ const useChatStoreProtected = create<ChatStore>()(
               updatedAt: new Date()
             }
             
-            // Validação antes de adicionar
-            const validation = validateSession(unifiedSession)
-            if (validation.valid) {
-              state.sessions.set(unifiedSessionId, unifiedSession)
-            } else {
-              console.error('Sessão unificada inválida:', validation.issues)
-            }
+            // NÃO adiciona mais a sessão unificada - removido por solicitação
+            // const validation = validateSession(unifiedSession)
+            // if (validation.valid) {
+            //   state.sessions.set(unifiedSessionId, unifiedSession)
+            // } else {
+            //   console.error('Sessão unificada inválida:', validation.issues)
+            // }
             
             // Carrega sessões individuais com validação
             sessions.forEach((sessionData: any) => {

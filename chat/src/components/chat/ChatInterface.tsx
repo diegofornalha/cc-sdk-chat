@@ -8,7 +8,7 @@ import SessionErrorBoundary from "../error/SessionErrorBoundary";
 import { useSessionRecovery } from "@/hooks/useSessionRecovery";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
-import { Settings, Download, RefreshCw, Trash2, Bot } from "lucide-react";
+import { Settings, Download, RefreshCw, Trash2, Bot, Clock, DollarSign, Activity } from "lucide-react";
 import useChatStore, { SessionConfig } from "@/stores/chatStore";
 import ChatAPI from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -818,7 +818,6 @@ export function ChatInterface({
           onSessionSelect={setActiveSession}
           onSessionClose={deleteSession}
           onNewSession={() => handleNewSession()}
-          onAnalytics={() => console.log("Analytics em desenvolvimento")}
         />
       </header>
 
@@ -915,23 +914,51 @@ export function ChatInterface({
               <div className="border-t px-4 py-2">
                 <div className="mx-auto flex max-w-4xl items-center justify-between text-xs text-muted-foreground">
                   <div className="flex items-center gap-4">
-                    <span>Mensagens: {activeSession.messages.length}</span>
-                    <span>Tokens: {activeSession.metrics.totalTokens}</span>
+                    <span className="flex items-center gap-1">
+                      <Activity className="h-3 w-3" />
+                      {activeSession.messages.length} mensagens
+                    </span>
+                    <span className="flex items-center gap-1">
+                      🔥 {activeSession.metrics.totalTokens.toLocaleString()} tokens
+                    </span>
+                    {activeSession.metrics.totalCost > 0 && (
+                      <span className="flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        ${activeSession.metrics.totalCost.toFixed(4)}
+                      </span>
+                    )}
+                    {activeSession.messages.length > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {(() => {
+                          const lastMsg = activeSession.messages[activeSession.messages.length - 1];
+                          const lastTime = new Date(lastMsg.timestamp);
+                          const now = new Date();
+                          const diffMs = now.getTime() - lastTime.getTime();
+                          const diffMins = Math.floor(diffMs / 60000);
+                          
+                          if (diffMins < 1) return 'agora';
+                          if (diffMins < 60) return `há ${diffMins}min`;
+                          const diffHours = Math.floor(diffMins / 60);
+                          if (diffHours < 24) return `há ${diffHours}h`;
+                          const diffDays = Math.floor(diffHours / 24);
+                          return `há ${diffDays}d`;
+                        })()}
+                      </span>
+                    )}
+                    {activeSession.createdAt && (
+                      <span className="flex items-center gap-1 text-muted-foreground/60">
+                        Criada em {new Date(activeSession.createdAt).toLocaleTimeString('pt-BR', { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2">
                     {!readOnly && (
                       <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={handleClearSession}
-                          disabled={isStreaming}
-                        >
-                          <RefreshCw className="mr-2 h-3 w-3" />
-                          Limpar
-                        </Button>
-
                         <Button
                           variant="ghost"
                           size="sm"

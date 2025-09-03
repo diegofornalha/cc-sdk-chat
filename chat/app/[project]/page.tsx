@@ -16,7 +16,9 @@ import {
   Calendar,
   ArrowRight,
   FolderOpen,
-  Activity
+  Activity,
+  Plus,
+  ArrowLeft
 } from 'lucide-react';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import useChatStore from '@/stores/chatStore';
@@ -40,7 +42,7 @@ export default function ProjectDashboardPage() {
   const searchParams = useSearchParams();
   const [projectSessions, setProjectSessions] = useState<ProjectSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>(''); // Será definido após carregar sessões
   const [unifiedMessages, setUnifiedMessages] = useState<any[]>([]);
   
   const { 
@@ -118,8 +120,8 @@ export default function ProjectDashboardPage() {
         // Se tem tab específica na URL (?tab=05d20033)
         if (tabParam === 'overview') {
           // Se tentar acessar overview, redireciona para primeira sessão
-          if (projectSessions.length > 0) {
-            setActiveTab(projectSessions[0].id);
+          if (sortedSessions.length > 0) {
+            setActiveTab(sortedSessions[0].id);
           }
         } else {
           // Busca sessão que termine com o ID curto
@@ -128,14 +130,14 @@ export default function ProjectDashboardPage() {
           );
           if (matchingSession) {
             setActiveTab(matchingSession.id);
-          } else if (projectSessions.length > 0) {
-            setActiveTab(projectSessions[0].id); // Usa primeira sessão como fallback
+          } else if (sortedSessions.length > 0) {
+            setActiveTab(sortedSessions[0].id); // Usa primeira sessão como fallback
           }
         }
       } else {
-        // Sem query parameter, usa primeira sessão se existir
-        if (projectSessions.length > 0) {
-          setActiveTab(projectSessions[0].id);
+        // Sem query parameter, SEMPRE abre a primeira sessão por padrão
+        if (sortedSessions.length > 0) {
+          setActiveTab(sortedSessions[0].id);
         }
       }
 
@@ -234,9 +236,34 @@ export default function ProjectDashboardPage() {
           </div>
           
           <div className="flex items-center gap-2">
-            <div className="text-right text-sm">
+            <div className="text-right text-sm mr-4">
               <div className="font-medium">{totalStats.tokens.toLocaleString()} tokens</div>
             </div>
+            
+            {/* Botão Voltar */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push('/')}
+              className="shrink-0"
+              title="Voltar para início"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            
+            {/* Botão Nova Sessão */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Redireciona para a página principal para criar nova sessão
+                router.push('/');
+              }}
+              className="shrink-0"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nova Sessão
+            </Button>
           </div>
         </div>
 

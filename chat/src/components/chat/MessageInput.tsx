@@ -1,5 +1,5 @@
 import React from 'react'
-import { Send, RefreshCw, Mic, Square, Command } from 'lucide-react'
+import { Send, RefreshCw, Mic, Square } from 'lucide-react'
 import { Button } from '../ui/button'
 import { cn } from '@/lib/utils'
 import { useHotkeys } from 'react-hotkeys-hook'
@@ -37,7 +37,6 @@ export function MessageInput({
     
     return (
       sessionId?.startsWith('project-') ||
-      sessionTitle?.includes('Timeline Unificada') ||
       sessionTitle?.includes('Terminal') ||
       sessionTitle?.includes('sessões') ||
       (isTerminalProject && sessionId?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/))
@@ -220,33 +219,22 @@ Mensagem atual: ${finalMessage}`
           </div>
         </div>
 
-        {/* Shortcuts hint e indicador de navegação automática */}
-        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1">
-              <Command className="h-3 w-3" />
-              <kbd>K</kbd> Command Palette
-            </span>
-            <span>
-              <kbd>Shift+Enter</kbd> Nova linha
-            </span>
-            <span>
-              <kbd>/</kbd> Focar input
-            </span>
-            {/* Indicador de sessão bloqueada */}
-            {isTerminalSession && (
+        {/* Indicador de sessão bloqueada (se necessário) */}
+        {isTerminalSession && (
+          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-4">
               <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400">
                 <div className="flex h-2 w-2 items-center justify-center">
                   <div className="h-full w-full rounded-full bg-blue-500" />
                 </div>
                 Claude Code SDK - Somente Leitura
               </span>
-            )}
+            </div>
+            <span>
+              {isStreaming ? 'Gerando resposta...' : 'Pronto para enviar'}
+            </span>
           </div>
-          <span>
-            {isStreaming ? 'Gerando resposta...' : 'Pronto para enviar'}
-          </span>
-        </div>
+        )}
       </div>
     </div>
   )

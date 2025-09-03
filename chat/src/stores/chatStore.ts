@@ -477,10 +477,10 @@ const useChatStore = create<ChatStore>()(
             updatedAt: new Date()
           }
           
-          // Adiciona a sessão unificada
-          state.sessions.set(unifiedSessionId, unifiedSession)
+          // NÃO adiciona mais a sessão unificada - removido por solicitação
+          // state.sessions.set(unifiedSessionId, unifiedSession)
           
-          // Carrega também cada sessão individual como abas separadas
+          // Carrega APENAS cada sessão individual como abas separadas
           sessions.forEach((sessionData: any) => {
             if (!state.sessions.has(sessionData.id)) {
               const session: Session = {
