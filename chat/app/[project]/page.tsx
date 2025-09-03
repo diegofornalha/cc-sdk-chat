@@ -460,17 +460,6 @@ export default function ProjectDashboardPage() {
                           <div className="text-muted-foreground">Tokens</div>
                           <div className="font-medium">{session.total_tokens.toLocaleString()}</div>
                         </div>
-                        <div>
-                          <div className="text-muted-foreground">Duração</div>
-                          <div className="font-medium">
-                            {(() => {
-                              const start = new Date(session.first_message_time);
-                              const end = new Date(session.last_message_time);
-                              const diffHours = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60));
-                              return diffHours > 0 ? `${diffHours}h` : '< 1h';
-                            })()}
-                          </div>
-                        </div>
                       </div>
 
                       <div className="pt-3 border-t">
