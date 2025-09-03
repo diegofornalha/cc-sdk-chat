@@ -20,7 +20,9 @@ import {
   Plus,
   ArrowLeft,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Copy,
+  Check
 } from 'lucide-react';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import useChatStore from '@/stores/chatStore';
@@ -47,6 +49,7 @@ export default function ProjectDashboardPage() {
   const [activeTab, setActiveTab] = useState<string>(''); // Será definido após carregar sessões
   const [unifiedMessages, setUnifiedMessages] = useState<any[]>([]);
   const [deletingMessages, setDeletingMessages] = useState<Set<string>>(new Set()); // Rastreia mensagens sendo deletadas
+  const [copiedSessions, setCopiedSessions] = useState<Set<string>>(new Set()); // Rastreia sessões copiadas
   
   const { 
     sessions, 
@@ -347,6 +350,74 @@ export default function ProjectDashboardPage() {
       console.log('✅ Sessão limpa com sucesso');
     } catch (error) {
       console.error('Erro ao limpar sessão:', error);
+    }
+  };
+  
+  // Função para copiar todas as conversas
+  const handleCopyAllConversations = async (sessionId: string) => {
+    try {
+      // Obtém a sessão atual
+      const session = projectSessions.find(s => s.id === sessionId);
+      if (!session || !session.messages || session.messages.length === 0) {
+        console.log('Sessão vazia ou não encontrada');
+        return;
+      }
+      
+      // Formata as mensagens para copiar
+      let formattedText = `🔹 Sessão: ${session.origin} (${session.id})\n`;
+      formattedText += `📅 Período: ${new Date(session.first_message_time).toLocaleString('pt-BR')} - ${new Date(session.last_message_time).toLocaleString('pt-BR')}\n`;
+      formattedText += `📊 Total: ${session.total_messages} mensagens | ${session.total_tokens.toLocaleString()} tokens | $${session.total_cost.toFixed(4)}\n`;
+      formattedText += `${'━'.repeat(80)}\n\n`;
+      
+      // Adiciona cada mensagem formatada
+      session.messages.forEach((msg: any, index: number) => {
+        const timestamp = new Date(msg.timestamp).toLocaleString('pt-BR');
+        const role = msg.role === 'user' ? '👤 Usuário' : '🤖 Claude';
+        
+        formattedText += `[${timestamp}] ${role}:\n`;
+        
+        // Processa o conteúdo da mensagem
+        let content = '';
+        if (typeof msg.content === 'string') {
+          content = msg.content;
+        } else if (Array.isArray(msg.content)) {
+          content = msg.content.map(item => {
+            if (typeof item === 'string') return item;
+            if (item.type === 'text') return item.text;
+            if (item.type === 'tool_use') return `[Ferramenta: ${item.name}]`;
+            return '[Conteúdo não textual]';
+          }).join('\n');
+        }
+        
+        formattedText += content + '\n';
+        
+        // Adiciona métricas se disponíveis
+        if (msg.tokens || msg.cost) {
+          formattedText += `  ⚡ Tokens: ${msg.tokens || 0} | Custo: $${(msg.cost || 0).toFixed(4)}\n`;
+        }
+        
+        formattedText += '\n' + '─'.repeat(40) + '\n\n';
+      });
+      
+      // Copia para a área de transferência
+      await navigator.clipboard.writeText(formattedText);
+      
+      // Adiciona feedback visual
+      setCopiedSessions(prev => new Set(prev).add(sessionId));
+      
+      // Remove o feedback após 2 segundos
+      setTimeout(() => {
+        setCopiedSessions(prev => {
+          const next = new Set(prev);
+          next.delete(sessionId);
+          return next;
+        });
+      }, 2000);
+      
+      console.log('📋 Conversa copiada para a área de transferência!');
+    } catch (error) {
+      console.error('Erro ao copiar conversa:', error);
+      alert('Erro ao copiar conversa. Verifique as permissões do navegador.');
     }
   };
 
@@ -666,6 +737,25 @@ export default function ProjectDashboardPage() {
                       
                       <Button 
                         className="w-full mt-2" 
+                        variant="outline"
+                        onClick={() => handleCopyAllConversations(session.id)}
+                        disabled={session.messages.length === 0}
+                      >
+                        {copiedSessions.has(session.id) ? (
+                          <>
+                            <Check className="mr-2 h-4 w-4 text-green-600" />
+                            Copiado!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="mr-2 h-4 w-4" />
+                            Copiar Conversa
+                          </>
+                        )}
+                      </Button>
+                      
+                      <Button 
+                        className="w-full mt-2" 
                         variant="destructive"
                         onClick={() => handleClearSession(session.id)}
                         disabled={session.messages.length === 0}
@@ -677,15 +767,39 @@ export default function ProjectDashboardPage() {
                   </div>
 
                   {/* Conteúdo da sessão */}
-                  <div className="flex-1 overflow-y-auto px-4 py-6">
+                  <div className="flex-1 overflow-y-auto px-4 py-6 relative">
                     <div className="mx-auto max-w-4xl">
-                      <div className="mb-6">
-                        <h2 className="text-lg font-semibold mb-2">
-                          {session.origin} • {session.id.slice(-8)}
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          {session.total_messages} mensagens • {session.total_tokens.toLocaleString()} tokens
-                        </p>
+                      <div className="mb-6 flex items-start justify-between">
+                        <div>
+                          <h2 className="text-lg font-semibold mb-2">
+                            {session.origin} • {session.id.slice(-8)}
+                          </h2>
+                          <p className="text-sm text-muted-foreground">
+                            {session.total_messages} mensagens • {session.total_tokens.toLocaleString()} tokens
+                          </p>
+                        </div>
+                        
+                        {/* Botão flutuante para copiar */}
+                        {session.messages.length > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleCopyAllConversations(session.id)}
+                            className="sticky top-2 right-2"
+                          >
+                            {copiedSessions.has(session.id) ? (
+                              <>
+                                <Check className="mr-2 h-4 w-4 text-green-600" />
+                                Copiado!
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copiar Tudo
+                              </>
+                            )}
+                          </Button>
+                        )}
                       </div>
 
                       {session.messages.length === 0 ? (
