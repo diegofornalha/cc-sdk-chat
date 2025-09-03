@@ -114,7 +114,7 @@ export default function ProjectDashboardPage() {
       setProjectSessions(sortedSessions);
 
       // Define aba baseada no query parameter
-      const tabParam = searchParams.get('tab');
+      const tabParam = searchParams?.get('tab');
       if (tabParam) {
         // Se tem tab específica na URL (?tab=05d20033)
         if (tabParam === 'overview') {

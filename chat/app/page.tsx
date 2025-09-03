@@ -35,7 +35,8 @@ export default function Home() {
     const loadClaudeCodeProjects = async () => {
       try {
         // Carregar apenas projetos Claude Code SDK
-        const response = await fetch('http://localhost:8992/api/discover-projects');
+        const { config } = await import('@/lib/config');
+        const response = await fetch(`${config.getApiUrl()}/api/discover-projects`);
         const data = await response.json();
         
         setProjects(data.projects || []);
@@ -52,14 +53,25 @@ export default function Home() {
   }, []);
 
   const formatProjectName = (name: string) => {
+    // Nomes específicos e simples para cada projeto
+    if (name === '-home-suthub--claude') {
+      return '.claude';
+    }
+    if (name === '-home-suthub--claude-api-claude-code-app') {
+      return 'api-claude-code-app';
+    }
+    if (name.includes('-cc-sdk-chat-api')) {
+      return 'cc-sdk-chat-api';
+    }
+    if (name.includes('-cc-sdk-chat')) {
+      return 'cc-sdk-chat';
+    }
+    
+    // Fallback para outros projetos
     return name
       .replace(/-/g, ' ')
-      .replace(/home|suthub|claude|api|code|app/gi, '')
-      .trim()
-      .split(' ')
-      .filter(word => word.length > 0)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ') || 'Projeto Claude';
+      .replace(/home|suthub/gi, '')
+      .trim() || 'Projeto';
   };
 
   const formatLastActivity = (timestamp: string | null) => {
@@ -147,13 +159,14 @@ export default function Home() {
                         <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
                           Claude Code SDK
                         </span>
-                        {project.name.includes('-claude-api-claude-code-app') ? (
-                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                            🚀 Projeto
-                          </span>
-                        ) : project.name === '-home-suthub--claude' ? (
+                        {project.name === '-home-suthub--claude' || 
+                         project.name === '-home-suthub--claude-api-claude-code-app' ? (
                           <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
                             🏠 Terminal
+                          </span>
+                        ) : project.name.includes('-claude-api-claude-code-app-cc-sdk-chat') ? (
+                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                            🚀 Projeto
                           </span>
                         ) : null}
                         <span className="text-xs text-muted-foreground">

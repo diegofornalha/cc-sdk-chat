@@ -66,7 +66,9 @@ export default function SessionViewerPage() {
         if (!realSessionId) return; // Redirecionamento já feito
 
         // Carregar sessão específica
-        fetch(`http://localhost:8992/api/session-history/${realSessionId}`)
+        import('@/lib/config').then(({ config }) => {
+          return fetch(`${config.getApiUrl()}/api/session-history/${realSessionId}`)
+        })
           .then(res => res.json())
           .then(data => {
             if (!data.error && data.messages) {

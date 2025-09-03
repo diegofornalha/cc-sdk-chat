@@ -372,9 +372,19 @@ const useChatStore = create<ChatStore>()(
     loadExternalSession: (sessionData) => {
       set((state) => {
         const sessionId = sessionData.id
+        // Detecta se é uma sessão do Claude Code (terminal)
+        const isClaudeCodeSession = sessionData.origin === 'Terminal' || 
+                                    sessionData.origin === 'Claude Code' ||
+                                    sessionData.title?.includes('Terminal') ||
+                                    sessionData.title?.includes('Claude Code');
+        
+        const sessionTitle = isClaudeCodeSession 
+          ? `Claude Code SDK - Somente Leitura`
+          : sessionData.title || `Sessão ${sessionId.slice(-8)}`;
+        
         const newSession: Session = {
           id: sessionId,
-          title: `Sessão ${sessionId.slice(-8)}`,
+          title: sessionTitle,
           messages: sessionData.messages.map((msg: any) => ({
             ...msg,
             timestamp: new Date(msg.timestamp)

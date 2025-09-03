@@ -1,6 +1,6 @@
 """Servidor FastAPI para integração com Claude Code SDK."""
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -858,7 +858,22 @@ async def send_message(chat_message: SecureChatMessage) -> StreamingResponse:
                     total_chunks += 1
                     
         except Exception as e:
-            # Tenta fallback em caso de erro
+            error_msg = str(e)
+            
+            # Verifica se é erro de transporte fechado (cliente desconectou)
+            if 'WriteUnixTransport' in error_msg and 'closed=True' in error_msg:
+                logger.debug(
+                    "Cliente desconectou durante streaming",
+                    extra={
+                        "event": "client_disconnected",
+                        "session_id": real_session_id or "unknown",
+                        "chunks_sent": total_chunks
+                    }
+                )
+                # Não tenta enviar mais dados pois o cliente já fechou a conexão
+                return
+            
+            # Tenta fallback em caso de outros erros
             try:
                 fallback_result = await fallback_system.execute_with_fallback(
                     "chat",
@@ -896,12 +911,29 @@ async def send_message(chat_message: SecureChatMessage) -> StreamingResponse:
                     "chunks_sent": total_chunks
                 }
             )
-            yield await StreamingErrorHandler.handle_streaming_error(
-                asyncio.TimeoutError("Timeout no processamento da mensagem"),
-                real_session_id or "unknown"
-            )
+            try:
+                yield await StreamingErrorHandler.handle_streaming_error(
+                    asyncio.TimeoutError("Timeout no processamento da mensagem"),
+                    real_session_id or "unknown"
+                )
+            except:
+                # Cliente já desconectou, ignora erro
+                pass
             
         except Exception as e:
+            error_msg = str(e)
+            
+            # Verifica se é erro de transporte fechado
+            if 'WriteUnixTransport' in error_msg and 'closed=True' in error_msg:
+                logger.debug(
+                    "Cliente desconectou no final do streaming",
+                    extra={
+                        "event": "client_disconnected_end",
+                        "session_id": real_session_id or "unknown"
+                    }
+                )
+                return
+            
             duration_ms = (time.time() - start_time) * 1000
             logger.error(
                 "Erro durante streaming de mensagem",
@@ -914,9 +946,13 @@ async def send_message(chat_message: SecureChatMessage) -> StreamingResponse:
                     "chunks_sent": total_chunks
                 }
             )
-            yield await StreamingErrorHandler.handle_streaming_error(
-                e, real_session_id or "unknown"
-            )
+            try:
+                yield await StreamingErrorHandler.handle_streaming_error(
+                    e, real_session_id or "unknown"
+                )
+            except:
+                # Cliente já desconectou, ignora erro
+                pass
         finally:
             duration_ms = (time.time() - start_time) * 1000
             
@@ -931,12 +967,16 @@ async def send_message(chat_message: SecureChatMessage) -> StreamingResponse:
                 }
             )
             
-            # Envia evento de fim com session_id real
-            final_data = {
-                'type': 'done', 
-                'session_id': real_session_id or "unknown"
-            }
-            yield f"data: {json.dumps(final_data)}\n\n"
+            # Tenta enviar evento de fim, mas ignora se cliente já desconectou
+            try:
+                final_data = {
+                    'type': 'done', 
+                    'session_id': real_session_id or "unknown"
+                }
+                yield f"data: {json.dumps(final_data)}\n\n"
+            except:
+                # Cliente já desconectou, não há problema
+                pass
     
     return StreamingResponse(
         generate(),
@@ -1450,12 +1490,29 @@ async def get_session_history(session_id: str):
         return {"messages": [], "error": f"Arquivo de sessão {session_id} não encontrado"}
     
     messages = []
+    origin = None  # Detecta origem da sessão
+    session_title = None
+    
     try:
         with open(target_file, 'r', encoding='utf-8') as f:
+            first_line = True
             for line in f:
                 if line.strip():
                     try:
                         data = json.loads(line)
+                        
+                        # Detecta origem na primeira linha
+                        if first_line:
+                            first_line = False
+                            if data.get('type') == 'summary':
+                                origin = 'Terminal'
+                                session_title = 'Claude Code SDK - Somente Leitura'
+                            elif data.get('userType') == 'external':
+                                origin = 'Terminal'
+                                session_title = 'Claude Code SDK - Somente Leitura'
+                            else:
+                                origin = 'Web'
+                                session_title = f'Sessão {session_id[-8:]}'
                         
                         # Extrai mensagem se existir
                         if 'message' in data and 'role' in data['message']:
@@ -1502,6 +1559,8 @@ async def get_session_history(session_id: str):
     return {
         "messages": messages,
         "session_id": session_id,
+        "origin": origin,
+        "title": session_title,
         "total_messages": len(messages),
         "file": str(target_file)
     }

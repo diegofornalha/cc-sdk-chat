@@ -91,8 +91,11 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                     r"\\windows\\system32",
                 ],
                 "command_injection": [
-                    r"[;&|`$\(\){}]",
-                    r"\b(curl|wget|nc|netcat|bash|sh|cmd|powershell)\b",
+                    # Removido padrão muito agressivo que bloqueava caracteres comuns
+                    # Agora detecta apenas comandos realmente perigosos em contexto
+                    r"(;|\||&&)\s*(rm|del|format|shutdown|reboot|kill)\s+",
+                    r"\b(nc|netcat)\s+-e\s+/bin/(bash|sh)",  # Reverse shell
+                    r">\s*/dev/(null|tcp/)",  # Redirecionamento perigoso
                 ]
             },
             "rate_limits": {
@@ -311,6 +314,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     
     async def _detect_attacks(self, request: Request):
         """Detecta padrões de ataques comuns."""
+        # Pula verificação para endpoint /api/chat - mensagens de chat normais
+        if request.url.path == "/api/chat":
+            return  # Não aplica detecção de ataques em mensagens de chat
+        
         # Coleta dados da request para análise
         request_data = {
             "url": str(request.url),

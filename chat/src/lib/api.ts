@@ -2,6 +2,8 @@
  * Cliente API para comunicação com o backend
  */
 
+import { config } from './config';
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -31,22 +33,12 @@ class ChatAPI {
   private sessionId: string | null = null;
 
   constructor(baseUrl?: string) {
-    // Detecta automaticamente a URL baseado no ambiente
-    if (baseUrl) {
-      this.baseUrl = baseUrl;
-    } else if (typeof window !== 'undefined') {
-      // No browser, usa a mesma origem ou localhost para desenvolvimento
-      const host = window.location.hostname;
-      if (host === 'suthub.agentesintegrados.com') {
-        // Em produção, usa a mesma origem (Caddy fará o proxy)
-        this.baseUrl = '';
-      } else {
-        // Em desenvolvimento, usa localhost
-        this.baseUrl = 'http://localhost:8992';
-      }
-    } else {
-      // SSR ou ambiente Node.js
-      this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8992';
+    // Usa a configuração centralizada
+    this.baseUrl = baseUrl || config.getApiUrl();
+    
+    // Debug em desenvolvimento
+    if (config.isDevelopment()) {
+      console.log('🔌 API configurada para:', this.baseUrl);
     }
   }
 

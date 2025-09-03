@@ -30,21 +30,20 @@ class SecureChatMessage(BaseModel):
         if not v or not v.strip():
             raise ValueError('Mensagem não pode estar vazia')
         
-        # Remove caracteres de controle perigosos
+        # Remove apenas caracteres de controle perigosos (não imprimíveis)
         v = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', v)
         
-        # Escapa HTML para prevenir XSS
-        v = html.escape(v.strip())
+        # Não escapa HTML - deixa o texto como está para chat normal
+        # Apenas remove tags script diretas se existirem
+        v = v.strip()
         
-        # Remove scripts potencialmente perigosos
+        # Remove apenas scripts realmente perigosos (tags script completas)
         dangerous_patterns = [
             r'<script[^>]*>.*?</script>',
-            r'javascript:',
-            r'data:text/html',
+            r'<iframe[^>]*>.*?</iframe>',
+            r'javascript:alert\(',
+            r'data:text/html;base64',
             r'vbscript:',
-            r'onload\s*=',
-            r'onerror\s*=',
-            r'onclick\s*=',
         ]
         
         for pattern in dangerous_patterns:
