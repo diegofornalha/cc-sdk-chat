@@ -76,33 +76,15 @@ export async function POST(request: NextRequest) {
     // Reconstrói o arquivo sem a mensagem deletada
     const newContent = [...otherLines, ...messages].join('\n');
     
-    // Faz backup antes de sobrescrever
-    const backupPath = filePath + `.backup.${Date.now()}`;
-    fs.copyFileSync(filePath, backupPath);
-    console.log(`💾 Backup criado: ${backupPath}`);
-    
-    // Escreve o novo conteúdo
+    // Escreve o novo conteúdo diretamente (sem backup)
     fs.writeFileSync(filePath, newContent + '\n');
     
     console.log('✅ Mensagem deletada com sucesso');
     
-    // Limpa backups antigos (mantém apenas os 5 mais recentes)
-    const backupFiles = fs.readdirSync(path.dirname(filePath))
-      .filter(f => f.startsWith(`${sessionId}.jsonl.backup.`))
-      .sort()
-      .reverse();
-    
-    if (backupFiles.length > 5) {
-      for (let i = 5; i < backupFiles.length; i++) {
-        fs.unlinkSync(path.join(path.dirname(filePath), backupFiles[i]));
-      }
-    }
-    
     return NextResponse.json({
       success: true,
       deletedIndex: messageIndex,
-      remainingMessages: messages.length,
-      backupCreated: backupPath
+      remainingMessages: messages.length
     });
     
   } catch (error) {

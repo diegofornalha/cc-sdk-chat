@@ -234,11 +234,6 @@ export default function ProjectDashboardPage() {
   const totalStats = calculateTotalStats();
   
   const handleDeleteMessage = async (sessionId: string, messageIndex: number) => {
-    // Confirmação antes de deletar
-    if (!confirm('Tem certeza que deseja deletar esta mensagem? Esta ação não pode ser desfeita.')) {
-      return;
-    }
-    
     const messageKey = `${sessionId}-${messageIndex}`;
     
     try {
@@ -327,6 +322,31 @@ export default function ProjectDashboardPage() {
       await loadProjectData();
       console.error('❌ Erro ao deletar mensagem:', error);
       alert('Erro ao deletar mensagem');
+    }
+  };
+
+  // Função para limpar todas as mensagens de uma sessão
+  const handleClearSession = async (sessionId: string) => {
+    try {
+      // Obtém a sessão atual
+      const session = projectSessions.find(s => s.id === sessionId);
+      if (!session || !session.messages || session.messages.length === 0) {
+        console.log('Sessão vazia ou não encontrada');
+        return;
+      }
+      
+      console.log(`🧹 Limpando ${session.messages.length} mensagens da sessão ${sessionId}`);
+      
+      // Deleta todas as mensagens de trás para frente
+      for (let i = session.messages.length - 1; i >= 0; i--) {
+        await handleDeleteMessage(sessionId, i);
+        // Pequeno delay entre deleções para não sobrecarregar
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
+      console.log('✅ Sessão limpa com sucesso');
+    } catch (error) {
+      console.error('Erro ao limpar sessão:', error);
     }
   };
 
@@ -642,6 +662,16 @@ export default function ProjectDashboardPage() {
                       >
                         <ArrowRight className="mr-2 h-4 w-4" />
                         Abrir Sessão
+                      </Button>
+                      
+                      <Button 
+                        className="w-full mt-2" 
+                        variant="destructive"
+                        onClick={() => handleClearSession(session.id)}
+                        disabled={session.messages.length === 0}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Limpar Tudo
                       </Button>
                     </div>
                   </div>
