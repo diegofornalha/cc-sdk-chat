@@ -2,7 +2,6 @@ import React from 'react'
 import { ChatMessage } from './ChatMessage'
 import { MessageInput } from './MessageInput'
 import { SessionTabs } from '../session/SessionTabs'
-import { SessionConfigModal } from '../session/SessionConfigModal'
 import { ProcessingIndicator } from '../../../components/ProcessingIndicator'
 import { ChatErrorBoundary } from '../error/ChatErrorBoundary'
 import SessionErrorBoundary from '../error/SessionErrorBoundary'
@@ -57,7 +56,6 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
     createReplacementSession 
   } = useSessionRecovery()
 
-  const [showConfigModal, setShowConfigModal] = React.useState(false)
   const [api] = React.useState(() => new ChatAPI())
   const [isTyping, setIsTyping] = React.useState(false)
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
@@ -310,10 +308,11 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
     }
   }, [activeSessionId, isStreaming])
 
-  const handleNewSession = (config?: SessionConfig) => {
-    const sessionId = createSession(config)
+  const handleNewSession = () => {
+    // Cria sessão diretamente sem modal
+    const sessionId = createSession()
     setActiveSession(sessionId)
-    console.log('Nova sessão criada')
+    console.log('Nova sessão criada diretamente')
   }
 
   const handleSendMessage = async (content: string) => {
@@ -761,7 +760,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
           activeSessionId={activeSessionId}
           onSessionSelect={setActiveSession}
           onSessionClose={deleteSession}
-          onNewSession={() => setShowConfigModal(true)}
+          onNewSession={() => handleNewSession()}
           onAnalytics={() => console.log('Analytics em desenvolvimento')}
         />
       </header>
@@ -910,15 +909,6 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
         </ChatErrorBoundary>
       </div>
 
-      {/* Session Config Modal */}
-      <SessionConfigModal
-        open={showConfigModal}
-        onOpenChange={setShowConfigModal}
-        onConfirm={(config) => {
-          handleNewSession(config)
-          setShowConfigModal(false)
-        }}
-      />
 
     </div>
   )
