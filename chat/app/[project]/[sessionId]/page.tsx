@@ -107,5 +107,34 @@ export default function SessionViewerPage() {
     );
   }
 
-  return <ChatInterface sessionData={sessionData} />;
+  // Detecta se é uma sessão do Claude Code (projeto termina com -api)
+  const isClaudeCodeSession = params?.project?.toString().endsWith('-api') || 
+                              params?.project?.toString().includes('claude-api-claude-code');
+  
+  // Verificar se a sessão foi iniciada pelo Terminal (Claude Code) 
+  // Sessões do Terminal geralmente têm metadados específicos ou padrão diferente
+  const checkIfTerminalSession = () => {
+    // Se temos os dados da sessão, podemos verificar metadados
+    if (sessionData && sessionData.messages && sessionData.messages.length > 0) {
+      const firstMessage = sessionData.messages[0];
+      // Sessões do Terminal podem ter características específicas
+      // Por exemplo, podem ter um campo 'cwd' ou 'userType' diferente
+      return false; // Por enquanto, vamos manter editável até identificarmos o padrão
+    }
+    return false;
+  };
+  
+  // Lista de sessões específicas do Terminal que devem ser somente leitura
+  const terminalSessionIds = [
+    '01e5dd2d-2b7f-409a-8c73-7827ec8139f0', // Nossa conversa atual no Terminal
+    // Adicione outros IDs de sessões do Terminal aqui
+  ];
+  
+  // Sessão é somente leitura SE:
+  // 1. For uma sessão específica do Terminal (na lista)
+  // 2. OU for do Claude Code E for identificada como sessão do Terminal
+  const isReadOnly = terminalSessionIds.includes(params?.sessionId?.toString() || '') ||
+                     (isClaudeCodeSession && checkIfTerminalSession());
+  
+  return <ChatInterface sessionData={sessionData} readOnly={isReadOnly} />;
 }

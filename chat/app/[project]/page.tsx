@@ -121,7 +121,7 @@ export default function ProjectDashboardPage() {
           setActiveTab('overview');
         } else {
           // Busca sessão que termine com o ID curto
-          const matchingSession = sortedSessions.find(s => 
+          const matchingSession = sortedSessions.find((s: any) => 
             s.id.slice(-8) === tabParam || s.id === tabParam
           );
           if (matchingSession) {

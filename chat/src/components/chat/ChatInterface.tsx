@@ -25,9 +25,10 @@ import { useRouter } from 'next/navigation'
 
 interface ChatInterfaceProps {
   sessionData?: any;
+  readOnly?: boolean;
 }
 
-export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
+export function ChatInterface({ sessionData, readOnly = false }: ChatInterfaceProps = {}) {
   const router = useRouter();
   const {
     sessions,
@@ -618,6 +619,14 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
           </div>
           
           <div className="flex items-center gap-2">
+            {readOnly && (
+              <div className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium flex items-center gap-1">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Modo Somente Leitura
+              </div>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -628,14 +637,16 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
               <Download className="h-5 w-5" />
             </Button>
             
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => toast.info('Importação em desenvolvimento')}
-              title="Importar sessão"
-            >
-              <Upload className="h-5 w-5" />
-            </Button>
+            {!readOnly && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => toast.info('Importação em desenvolvimento')}
+                title="Importar sessão"
+              >
+                <Upload className="h-5 w-5" />
+              </Button>
+            )}
             
             <Button
               variant="ghost"
@@ -754,45 +765,51 @@ export function ChatInterface({ sessionData }: ChatInterfaceProps = {}) {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearSession}
-                    disabled={isStreaming}
-                  >
-                    <RefreshCw className="mr-2 h-3 w-3" />
-                    Limpar
-                  </Button>
-                  
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (activeSessionId) {
-                        deleteSession(activeSessionId)
-                        toast.success('Sessão deletada')
-                      }
-                    }}
-                    disabled={isStreaming}
-                  >
-                    <Trash2 className="mr-2 h-3 w-3" />
-                    Deletar
-                  </Button>
+                  {!readOnly && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClearSession}
+                        disabled={isStreaming}
+                      >
+                        <RefreshCw className="mr-2 h-3 w-3" />
+                        Limpar
+                      </Button>
+                      
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (activeSessionId) {
+                            deleteSession(activeSessionId)
+                            toast.success('Sessão deletada')
+                          }
+                        }}
+                        disabled={isStreaming}
+                      >
+                        <Trash2 className="mr-2 h-3 w-3" />
+                        Deletar
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
           {/* Message Input */}
-          <MessageInput
-            onSend={handleSendMessage}
-            onInterrupt={handleInterrupt}
-            isStreaming={isStreaming}
-            disabled={!activeSessionId}
-            sessionId={activeSession?.id}
-            sessionTitle={activeSession?.title}
-            isFirstMessage={activeSession?.messages.length === 0}
-          />
+          {!readOnly && (
+            <MessageInput
+              onSend={handleSendMessage}
+              onInterrupt={handleInterrupt}
+              isStreaming={isStreaming}
+              disabled={!activeSessionId}
+              sessionId={activeSession?.id}
+              sessionTitle={activeSession?.title}
+              isFirstMessage={activeSession?.messages.length === 0}
+            />
+          )}
           </div>
         </ChatErrorBoundary>
       </div>
