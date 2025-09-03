@@ -44,9 +44,13 @@ export async function POST(request: NextRequest) {
     for (const line of lines) {
       try {
         const data = JSON.parse(line);
-        // Identifica linhas que são mensagens
-        if (data.type === 'user' || data.type === 'assistant' || 
-            (data.message && (data.message.role === 'user' || data.message.role === 'assistant'))) {
+        // Identifica linhas que são mensagens - verifica se tem message.role
+        // Isso é o mais confiável pois todas as mensagens têm esse campo
+        const isMessage = data.message && 
+                         data.message.role && 
+                         (data.message.role === 'user' || data.message.role === 'assistant');
+        
+        if (isMessage) {
           messages.push(line);
         } else {
           otherLines.push(line);
@@ -57,12 +61,19 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    console.log(`📨 Encontradas ${messages.length} mensagens`);
+    console.log(`📨 Encontradas ${messages.length} mensagens, ${otherLines.length} outras linhas`);
+    
+    // Log para debug
+    if (messages.length > 0) {
+      console.log('Primeira mensagem:', JSON.parse(messages[0]).message?.role || JSON.parse(messages[0]).type);
+      console.log('Índice solicitado:', messageIndex, 'Total de mensagens:', messages.length);
+    }
     
     // Verifica se o índice é válido
     if (messageIndex < 0 || messageIndex >= messages.length) {
+      console.error(`❌ Índice inválido: ${messageIndex} (total: ${messages.length})`);
       return NextResponse.json(
-        { error: 'Invalid message index' },
+        { error: `Invalid message index: ${messageIndex} (total messages: ${messages.length})` },
         { status: 400 }
       );
     }

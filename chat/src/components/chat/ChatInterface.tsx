@@ -8,7 +8,7 @@ import SessionErrorBoundary from "../error/SessionErrorBoundary";
 import { useSessionRecovery } from "@/hooks/useSessionRecovery";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
-import { Settings, Download, RefreshCw, Trash2, Bot, Clock, DollarSign, Activity } from "lucide-react";
+import { Settings, Download, RefreshCw, Trash2, Bot, Clock, DollarSign, Activity, ArrowDown } from "lucide-react";
 import useChatStore, { SessionConfig } from "@/stores/chatStore";
 import ChatAPI from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -52,9 +52,13 @@ export function ChatInterface({
 
   const [api] = React.useState(() => new ChatAPI());
   const [isTyping, setIsTyping] = React.useState(false);
+  const [isUserScrolling, setIsUserScrolling] = React.useState(false);
+  const [autoScrollEnabled, setAutoScrollEnabled] = React.useState(true);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const messagesContainerRef = React.useRef<HTMLDivElement>(null);
   const typingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const typingQueueRef = React.useRef<string[]>([]);
+  const scrollTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const activeSession = getActiveSession();
   const sessionList = Array.from(sessions.values());
@@ -179,10 +183,72 @@ export function ChatInterface({
     [isTyping],
   );
 
-  // Auto-scroll para última mensagem
+  // Sistema inteligente de auto-scroll
+  const scrollToBottom = React.useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (!autoScrollEnabled || isUserScrolling) return;
+    
+    // Usa requestAnimationFrame para suavizar a animação
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ 
+        behavior, 
+        block: "end",
+        inline: "nearest" 
+      });
+    });
+  }, [autoScrollEnabled, isUserScrolling]);
+
+  // Detecta quando usuário está rolando manualmente
+  const handleScroll = React.useCallback(() => {
+    if (!messagesContainerRef.current) return;
+    
+    const container = messagesContainerRef.current;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+    
+    // Se estiver a mais de 100px do final, considera que o usuário está rolando
+    const userIsScrolling = distanceFromBottom > 100;
+    
+    // Limpa timeout anterior
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    
+    if (userIsScrolling) {
+      setIsUserScrolling(true);
+      setAutoScrollEnabled(false);
+    } else {
+      // Se voltou pro final, reativa auto-scroll após pequeno delay
+      scrollTimeoutRef.current = setTimeout(() => {
+        setIsUserScrolling(false);
+        setAutoScrollEnabled(true);
+      }, 100);
+    }
+  }, []);
+
+  // Auto-scroll apenas quando apropriado
   React.useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeSession?.messages, streamingContent]);
+    // Só faz auto-scroll se:
+    // 1. Está habilitado
+    // 2. Usuário não está rolando
+    // 3. Há novas mensagens ou streaming
+    if (autoScrollEnabled && !isUserScrolling) {
+      // Delay pequeno para garantir que o DOM foi atualizado
+      const timeoutId = setTimeout(() => {
+        scrollToBottom("smooth");
+      }, 50);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [activeSession?.messages, streamingContent, scrollToBottom, autoScrollEnabled, isUserScrolling]);
+
+  // Força scroll para o fim quando iniciar nova mensagem
+  React.useEffect(() => {
+    if (isStreaming) {
+      setAutoScrollEnabled(true);
+      setIsUserScrolling(false);
+      scrollToBottom("auto");
+    }
+  }, [isStreaming, scrollToBottom]);
 
   // Cleanup da fila de digitação e timeouts
   React.useEffect(() => {
@@ -327,6 +393,10 @@ export function ChatInterface({
     if (isStreaming) return;
 
     // 🚀 FLUXO SIMPLIFICADO - Sem redirecionamentos automáticos
+    
+    // Reativa auto-scroll quando enviar mensagem
+    setIsUserScrolling(false);
+    setAutoScrollEnabled(true);
 
     let currentSessionId = activeSessionId;
 
@@ -839,7 +909,11 @@ export function ChatInterface({
                 onSessionRecovery={handleActiveSessionRecovery}
                 onCreateNewSession={handleCreateNewSessionAfterError}
               >
-                <div className="flex-1 overflow-y-auto px-4 py-6">
+                <div 
+                  ref={messagesContainerRef}
+                  onScroll={handleScroll}
+                  className="flex-1 overflow-y-auto px-4 py-6"
+                >
                   <div className="mx-auto max-w-4xl">
                     {activeSession?.messages.length === 0 && !isStreaming && (
                       <Card className="p-8 text-center">
@@ -890,6 +964,24 @@ export function ChatInterface({
                     )}
 
                     <div ref={messagesEndRef} />
+                    
+                    {/* Botão de scroll para baixo quando usuário rola para cima */}
+                    {isUserScrolling && (
+                      <div className="fixed bottom-24 right-6 z-50 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <Button
+                          onClick={() => {
+                            setIsUserScrolling(false);
+                            setAutoScrollEnabled(true);
+                            scrollToBottom("smooth");
+                          }}
+                          size="icon"
+                          className="rounded-full shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground"
+                          title="Voltar ao final"
+                        >
+                          <ArrowDown className="h-5 w-5" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </SessionErrorBoundary>
