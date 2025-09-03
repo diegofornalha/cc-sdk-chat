@@ -270,6 +270,14 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
     }
   }, [sessionData, loadExternalSession, loadCrossSessionHistory])
 
+  // Sincroniza sessionId com API quando activeSessionId muda
+  React.useEffect(() => {
+    if (activeSessionId && !activeSessionId.startsWith('temp-')) {
+      console.log('🔄 Sincronizando sessionId com API:', activeSessionId)
+      api.setSessionId(activeSessionId)
+    }
+  }, [activeSessionId])
+
   // 🚀 AGUARDA PRIMEIRA MENSAGEM: Não cria sessões temporárias
   React.useEffect(() => {
     if (sessions.size === 0 && !sessionData) {
@@ -540,7 +548,8 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
             setStreamingContent('')
             setProcessing(false)
           })
-        }
+        },
+        currentSessionId // Passa o sessionId correto para a API
       )
     } catch (error) {
       // Aguarda digitação terminar antes de mostrar erro

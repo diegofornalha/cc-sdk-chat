@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Teste UUID Session</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #00ff00;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #00cc00;
+        }
+        #output {
+            background: #000;
+            padding: 15px;
+            margin-top: 20px;
+            border: 1px solid #00ff00;
+            min-height: 200px;
+            white-space: pre-wrap;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+        input {
+            background: #000;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px;
+            width: 100%;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Teste de Session UUID Fixo</h1>
+        
+        <div class="status">
+            <strong>UUID Fixo:</strong> <span id="uuid">00000000-0000-0000-0000-000000000001</span><br>
+            <strong>Status:</strong> <span id="status">Pronto</span><br>
+            <strong>API URL:</strong> <span id="apiUrl">http://localhost:8990</span>
+        </div>
+
+        <input type="text" id="message" placeholder="Digite sua mensagem..." value="Teste com UUID fixo">
+        
+        <div>
+            <button onclick="testAPI()">📤 Testar API</button>
+            <button onclick="clearOutput()">🗑️ Limpar</button>
+            <button onclick="testDirectAPI()">🔧 Teste Direto</button>
+        </div>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const FIXED_UUID = '00000000-0000-0000-0000-000000000001';
+        const API_URL = 'http://localhost:8990';
+        
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '📝';
+            output.textContent += `[${timestamp}] ${prefix} ${message}\n`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function updateStatus(text) {
+            document.getElementById('status').textContent = text;
+        }
+        
+        async function testAPI() {
+            const message = document.getElementById('message').value;
+            if (!message) {
+                log('Digite uma mensagem!', 'error');
+                return;
+            }
+            
+            log(`Enviando: "${message}"`);
+            log(`Session ID: ${FIXED_UUID}`);
+            updateStatus('Enviando...');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        session_id: FIXED_UUID
+                    })
+                });
+                
+                log(`Status: ${response.status} ${response.statusText}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`Erro: ${errorText}`, 'error');
+                    updateStatus('Erro na requisição');
+                    return;
+                }
+                
+                updateStatus('Recebendo stream...');
+                
+                // Processa SSE stream
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6);
+                            if (dataStr.trim()) {
+                                try {
+                                    const data = JSON.parse(dataStr);
+                                    
+                                    if (data.type === 'text_chunk' || data.type === 'assistant_text') {
+                                        log(`Claude: ${data.content}`, 'success');
+                                    } else if (data.type === 'error') {
+                                        log(`Erro: ${data.error}`, 'error');
+                                    } else if (data.type === 'done') {
+                                        log('✅ Resposta completa!', 'success');
+                                    } else {
+                                        log(`Evento: ${data.type}`);
+                                    }
+                                    
+                                    // Verifica session_id
+                                    if (data.session_id && data.session_id !== FIXED_UUID) {
+                                        log(`⚠️ Session ID diferente recebido: ${data.session_id}`, 'error');
+                                    }
+                                } catch (e) {
+                                    log(`Erro parsing: ${e.message}`, 'error');
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                updateStatus('Completo');
+                
+            } catch (error) {
+                log(`Erro: ${error.message}`, 'error');
+                updateStatus('Erro');
+            }
+        }
+        
+        async function testDirectAPI() {
+            log('Testando conexão direta com API...');
+            
+            try {
+                // Teste simples de conectividade
+                const response = await fetch(`${API_URL}/health`, {
+                    method: 'GET'
+                });
+                
+                if (response.ok) {
+                    log('API está respondendo!', 'success');
+                } else {
+                    log(`API retornou: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`API não está acessível: ${error.message}`, 'error');
+                log('Certifique-se que o servidor está rodando na porta 8990');
+            }
+        }
+        
+        function clearOutput() {
+            document.getElementById('output').textContent = '';
+            log('Output limpo');
+        }
+        
+        // Testa ao carregar
+        window.onload = () => {
+            log('Sistema de teste iniciado');
+            log(`UUID Fixo configurado: ${FIXED_UUID}`, 'success');
+            
+            // Salva no localStorage para referência
+            localStorage.setItem('test_session_id', FIXED_UUID);
+        };
+        
+        // Enter envia mensagem
+        document.getElementById('message').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                testAPI();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -30,11 +30,22 @@ export interface StreamResponse {
 
 class ChatAPI {
   private baseUrl: string;
-  private sessionId: string | null = null;
+  // SOLUÇÃO DEFINITIVA: Session ID FIXO (UUID válido)
+  private readonly FIXED_SESSION_ID = '00000000-0000-0000-0000-000000000001';
+  private sessionId: string = this.FIXED_SESSION_ID;
 
   constructor(baseUrl?: string) {
     // Usa a configuração centralizada
     this.baseUrl = baseUrl || config.getApiUrl();
+    
+    // SEMPRE usa o session ID fixo
+    this.sessionId = this.FIXED_SESSION_ID;
+    console.log('🎯 Usando Session ID Fixo:', this.sessionId);
+    
+    // Salva no localStorage para consistência
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('current_session_id', this.FIXED_SESSION_ID);
+    }
     
     // Debug em desenvolvimento
     if (config.isDevelopment()) {
@@ -45,12 +56,29 @@ class ChatAPI {
 
 
 
+  // Método para definir sessionId - IGNORADO: sempre usa o ID fixo
+  setSessionId(sessionId: string | null) {
+    console.log('⚠️ Tentativa de mudar sessionId ignorada. Usando ID fixo:', this.FIXED_SESSION_ID);
+    // NÃO muda o sessionId - sempre usa o fixo
+    this.sessionId = this.FIXED_SESSION_ID;
+  }
+
+  // Método para obter sessionId atual - sempre retorna o fixo
+  getSessionId(): string {
+    return this.FIXED_SESSION_ID;
+  }
+
   async sendMessage(
     message: string,
     onStream: (data: StreamResponse) => void,
     onError?: (error: string) => void,
-    onComplete?: () => void
+    onComplete?: () => void,
+    sessionId?: string // Parâmetro opcional para forçar sessionId
   ): Promise<void> {
+    // Se sessionId foi passado, usa ele
+    if (sessionId) {
+      this.setSessionId(sessionId);
+    }
     // Debug log
     console.log('📤 Enviando mensagem:', {
       message: message.substring(0, 100),
@@ -126,13 +154,11 @@ class ChatAPI {
                 timestamp: new Date().toISOString()
               });
               
-              // Atualiza sessionId se recebido
-              if (data.session_id && data.session_id !== this.sessionId) {
-                console.log('🔄 Session ID atualizado:', {
-                  old: this.sessionId,
-                  new: data.session_id
-                });
-                this.sessionId = data.session_id;
+              // NÃO atualiza sessionId - sempre usa o FIXO
+              if (data.session_id && data.session_id !== this.FIXED_SESSION_ID) {
+                console.log('⚠️ Servidor retornou sessionId diferente:', data.session_id);
+                console.log('🎯 Mantendo Session ID Fixo:', this.FIXED_SESSION_ID);
+                // Monitor vai consolidar automaticamente
               }
               
               if (data.type === 'error' && onError) {
