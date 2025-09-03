@@ -40,7 +40,7 @@ export default function ProjectDashboardPage() {
   const searchParams = useSearchParams();
   const [projectSessions, setProjectSessions] = useState<ProjectSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [activeTab, setActiveTab] = useState<string>('');
   const [unifiedMessages, setUnifiedMessages] = useState<any[]>([]);
   
   const { 
@@ -117,7 +117,10 @@ export default function ProjectDashboardPage() {
       if (tabParam) {
         // Se tem tab específica na URL (?tab=05d20033)
         if (tabParam === 'overview') {
-          setActiveTab('overview');
+          // Se tentar acessar overview, redireciona para primeira sessão
+          if (projectSessions.length > 0) {
+            setActiveTab(projectSessions[0].id);
+          }
         } else {
           // Busca sessão que termine com o ID curto
           const matchingSession = sortedSessions.find((s: any) => 
@@ -125,13 +128,15 @@ export default function ProjectDashboardPage() {
           );
           if (matchingSession) {
             setActiveTab(matchingSession.id);
-          } else {
-            setActiveTab('overview'); // Fallback
+          } else if (projectSessions.length > 0) {
+            setActiveTab(projectSessions[0].id); // Usa primeira sessão como fallback
           }
         }
       } else {
-        // Sem query parameter, sempre mostra overview
-        setActiveTab('overview');
+        // Sem query parameter, usa primeira sessão se existir
+        if (projectSessions.length > 0) {
+          setActiveTab(projectSessions[0].id);
+        }
       }
 
       console.log(`📊 Dashboard carregado: ${sessionsData.length} sessões`);
@@ -246,7 +251,7 @@ export default function ProjectDashboardPage() {
           </span>
           <ArrowRight className="inline h-3 w-3 mx-2" />
           <span className="text-foreground font-medium">
-            Timeline Unificada
+            Sessões do Projeto
           </span>
         </div>
       </header>
@@ -257,15 +262,6 @@ export default function ProjectDashboardPage() {
           <div className="border-b bg-background">
             <TabsList className="w-full justify-start rounded-none bg-transparent px-4">
               {/* Aba Overview sempre primeira */}
-              <TabsTrigger 
-                value="overview" 
-                className="flex items-center gap-2 cursor-pointer"
-                onClick={() => router.push(`/${projectName}?tab=overview`)}
-              >
-                <Activity className="h-4 w-4" />
-                📋 Timeline Unificada
-              </TabsTrigger>
-              
               {/* Abas das sessões individuais */}
               {projectSessions.map((session, index) => {
                 const Icon = getSessionIcon(session.origin);
@@ -375,9 +371,9 @@ export default function ProjectDashboardPage() {
                 <div className="flex-1 overflow-y-auto px-4 py-6">
                   <div className="mx-auto max-w-4xl">
                     <div className="mb-6">
-                      <h2 className="text-lg font-semibold mb-2">Timeline Unificada</h2>
+                      <h2 className="text-lg font-semibold mb-2">Visão Geral do Projeto</h2>
                       <p className="text-sm text-muted-foreground">
-                        Histórico completo de todas as {projectSessions.length} sessões em ordem cronológica
+                        Histórico completo de todas as {projectSessions.length} sessões
                       </p>
                     </div>
 

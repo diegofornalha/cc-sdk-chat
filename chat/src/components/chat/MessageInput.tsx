@@ -1,5 +1,5 @@
 import React from 'react'
-import { Send, Paperclip, Mic, Square, Command } from 'lucide-react'
+import { Send, RefreshCw, Mic, Square, Command } from 'lucide-react'
 import { Button } from '../ui/button'
 import { cn } from '@/lib/utils'
 import { useHotkeys } from 'react-hotkeys-hook'
@@ -179,16 +179,17 @@ Mensagem atual: ${finalMessage}`
 
           {/* Action buttons */}
           <div className="flex gap-2">
-            {/* Attach button */}
+            {/* Refresh button */}
             <Button
               type="button"
               variant="outline"
               size="icon"
               disabled={isInputDisabled || isStreaming}
               className="h-[52px] w-[52px]"
-              title="Anexar arquivo (em breve)"
+              onClick={() => window.location.reload()}
+              title="Atualizar página"
             >
-              <Paperclip className="h-5 w-5" />
+              <RefreshCw className="h-5 w-5" />
             </Button>
 
             {/* Send/Interrupt button */}
