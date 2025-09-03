@@ -18,7 +18,9 @@ import {
   FolderOpen,
   Activity,
   Plus,
-  ArrowLeft
+  ArrowLeft,
+  Trash2,
+  AlertCircle
 } from 'lucide-react';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import useChatStore from '@/stores/chatStore';
@@ -44,6 +46,7 @@ export default function ProjectDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>(''); // Será definido após carregar sessões
   const [unifiedMessages, setUnifiedMessages] = useState<any[]>([]);
+  const [deletingMessages, setDeletingMessages] = useState<Set<string>>(new Set()); // Rastreia mensagens sendo deletadas
   
   const { 
     sessions, 
@@ -88,7 +91,7 @@ export default function ProjectDashboardPage() {
           allMessages.push({
             ...msg,
             sessionOrigin: session.id,
-            sessionTitle: `${session.origin} (${session.id.slice(-8)})`,
+            sessionTitle: getSessionDisplayName(session.origin, session.id),
             timestamp: new Date(msg.timestamp)
           });
         });
@@ -170,6 +173,16 @@ export default function ProjectDashboardPage() {
     if (origin?.includes('Web')) return Globe;
     return Terminal; // Default para sessões de terminal
   };
+  
+  // Função para padronizar os títulos das sessões
+  const getSessionDisplayName = (origin: string, sessionId: string) => {
+    // Se for sessão do Terminal/SDK, usa nome padronizado
+    if (origin?.includes('Terminal') || origin?.includes('SDK') || origin?.includes('Claude Code')) {
+      return `Agente SutHub • Claude (${sessionId.slice(-8)})`;
+    }
+    // Para outras sessões, mantém o formato original
+    return `${origin} (${sessionId.slice(-8)})`;
+  };
 
   const getSessionTitle = (session: ProjectSession, index: number) => {
     // Para sessões do projeto -home-suthub--claude, todas são do Terminal
@@ -219,6 +232,103 @@ export default function ProjectDashboardPage() {
   }
 
   const totalStats = calculateTotalStats();
+  
+  const handleDeleteMessage = async (sessionId: string, messageIndex: number) => {
+    // Confirmação antes de deletar
+    if (!confirm('Tem certeza que deseja deletar esta mensagem? Esta ação não pode ser desfeita.')) {
+      return;
+    }
+    
+    const messageKey = `${sessionId}-${messageIndex}`;
+    
+    try {
+      // Marca mensagem como sendo deletada (animação)
+      setDeletingMessages(prev => new Set(prev).add(messageKey));
+      
+      // Aguarda um pouco para a animação
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Remove da UI após animação
+      setProjectSessions(prevSessions => 
+        prevSessions.map(session => {
+          if (session.id === sessionId) {
+            const updatedMessages = [...session.messages];
+            updatedMessages.splice(messageIndex, 1);
+            return {
+              ...session,
+              messages: updatedMessages,
+              total_messages: updatedMessages.length
+            };
+          }
+          return session;
+        })
+      );
+      
+      // Remove do estado de deleção
+      setDeletingMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(messageKey);
+        return newSet;
+      });
+      
+      const response = await fetch('/api/delete-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId,
+          messageIndex,
+          projectPath: projectName
+        })
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Mensagem deletada:', result);
+        console.log('🗑️ Mensagem removida com sucesso!');
+        
+        // Atualiza também as mensagens unificadas
+        if (unifiedMessages.length > 0) {
+          setUnifiedMessages(prev => {
+            // Filtra removendo a mensagem deletada baseado no sessionOrigin
+            const updatedMessages = [...prev];
+            // Remove mensagens que correspondem ao sessionId e índice
+            return updatedMessages.filter((msg) => {
+              if (msg.sessionOrigin === sessionId) {
+                // Conta quantas mensagens da mesma sessão vêm antes desta
+                const sameSessionMessages = prev.filter(m => m.sessionOrigin === sessionId);
+                const msgIndex = sameSessionMessages.indexOf(msg);
+                return msgIndex !== messageIndex;
+              }
+              return true;
+            });
+          });
+        }
+      } else {
+        // Se falhar, reverte a mudança otimista
+        setDeletingMessages(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(messageKey);
+          return newSet;
+        });
+        await loadProjectData();
+        const error = await response.json();
+        console.error('❌ Erro ao deletar mensagem:', error);
+        alert('Erro ao deletar mensagem: ' + error.error);
+      }
+    } catch (error) {
+      // Se falhar, reverte a mudança otimista
+      setDeletingMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(messageKey);
+        return newSet;
+      });
+      await loadProjectData();
+      console.error('❌ Erro ao deletar mensagem:', error);
+      alert('Erro ao deletar mensagem');
+    }
+  };
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -414,20 +524,70 @@ export default function ProjectDashboardPage() {
                       </Card>
                     ) : (
                       <div className="space-y-4">
-                        {unifiedMessages.map((message, index) => (
-                          <ChatMessage
-                            key={`${message.sessionOrigin}-${index}`}
-                            role={message.role}
-                            content={message.content}
-                            timestamp={message.timestamp}
-                            tokens={message.tokens}
-                            cost={message.cost}
-                            tools={message.tools}
-                            sessionTitle={message.sessionTitle}
-                            sessionId={message.sessionOrigin}
-                            sessionOrigin={message.sessionOrigin}
-                          />
-                        ))}
+                        {unifiedMessages.map((message, index) => {
+                          const messageKey = `${message.sessionOrigin}-unified-${index}`;
+                          const isDeleting = deletingMessages.has(messageKey);
+                          
+                          // Encontra o índice real da mensagem na sessão original
+                          const sessionMessages = projectSessions.find(s => s.id === message.sessionOrigin)?.messages || [];
+                          const originalIndex = sessionMessages.findIndex((m: any) => 
+                            m.content === message.content && 
+                            m.role === message.role
+                          );
+                          
+                          return (
+                            <div 
+                              key={`${message.sessionOrigin}-${index}`}
+                              className={cn(
+                                "relative group transition-all duration-300",
+                                isDeleting && "opacity-50 scale-95 blur-sm pointer-events-none"
+                              )}
+                              style={{
+                                transform: isDeleting ? 'translateX(-100px)' : 'translateX(0)',
+                                transition: 'all 0.3s ease-out'
+                              }}
+                            >
+                              {/* Botão de Deletar - aparece para TODAS as mensagens (user e assistant) */}
+                              {!isDeleting && originalIndex >= 0 && (
+                                <button
+                                  onClick={() => {
+                                    console.log(`🗑️ Deletando mensagem unificada - Role: ${message.role}, Index: ${originalIndex}`);
+                                    handleDeleteMessage(message.sessionOrigin, originalIndex);
+                                  }}
+                                  className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 hover:scale-110 z-50"
+                                  title={`Deletar mensagem ${message.role === 'user' ? 'do usuário' : 'do Claude'}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                              
+                              {/* Indicador de deleção */}
+                              {isDeleting && (
+                                <div className="absolute inset-0 flex items-center justify-center z-10">
+                                  <div className="bg-red-500/90 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                    </svg>
+                                    Deletando...
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <ChatMessage
+                                role={message.role}
+                                content={message.content}
+                                timestamp={message.timestamp}
+                                tokens={message.tokens}
+                                cost={message.cost}
+                                tools={message.tools}
+                                sessionTitle={message.sessionTitle}
+                                sessionId={message.sessionOrigin}
+                                sessionOrigin={message.sessionOrigin}
+                              />
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -508,19 +668,62 @@ export default function ProjectDashboardPage() {
                         </Card>
                       ) : (
                         <div className="space-y-4">
-                          {session.messages.map((message: any, index: number) => (
-                            <ChatMessage
-                              key={`${session.id}-${index}`}
-                              role={message.role}
-                              content={message.content}
-                              timestamp={new Date(message.timestamp)}
-                              tokens={message.tokens}
-                              cost={message.cost}
-                              tools={message.tools}
-                              sessionTitle={`${session.origin} (${session.id.slice(-8)})`}
-                              sessionId={session.id}
-                            />
-                          ))}
+                          {session.messages.map((message: any, index: number) => {
+                            const messageKey = `${session.id}-${index}`;
+                            const isDeleting = deletingMessages.has(messageKey);
+                            
+                            return (
+                              <div 
+                                key={messageKey} 
+                                className={cn(
+                                  "relative group transition-all duration-300",
+                                  isDeleting && "opacity-50 scale-95 blur-sm pointer-events-none"
+                                )}
+                                style={{
+                                  transform: isDeleting ? 'translateX(-100px)' : 'translateX(0)',
+                                  transition: 'all 0.3s ease-out'
+                                }}
+                              >
+                                {/* Botão de Deletar - aparece para TODAS as mensagens (user e assistant) */}
+                                {!isDeleting && (
+                                  <button
+                                    onClick={() => {
+                                      console.log(`🗑️ Deletando mensagem ${index} - Role: ${message.role}`);
+                                      handleDeleteMessage(session.id, index);
+                                    }}
+                                    className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 hover:scale-110 z-50"
+                                    title={`Deletar mensagem ${message.role === 'user' ? 'do usuário' : 'do Claude'}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                                
+                                {/* Indicador de deleção */}
+                                {isDeleting && (
+                                  <div className="absolute inset-0 flex items-center justify-center z-10">
+                                    <div className="bg-red-500/90 text-white px-4 py-2 rounded-lg flex items-center gap-2">
+                                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                      Deletando...
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                <ChatMessage
+                                  role={message.role}
+                                  content={message.content}
+                                  timestamp={new Date(message.timestamp)}
+                                  tokens={message.tokens}
+                                  cost={message.cost}
+                                  tools={message.tools}
+                                  sessionTitle={getSessionDisplayName(session.origin, session.id)}
+                                  sessionId={session.id}
+                                />
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

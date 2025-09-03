@@ -46,7 +46,7 @@ export function MessageInput({
   // Define placeholder baseado no tipo de sessão
   const effectivePlaceholder = React.useMemo(() => {
     if (isTerminalSession) {
-      return "🔒 Claude Code SDK - Somente Leitura"
+      return "🔒 Agente SutHub • Claude"
     }
     return placeholder
   }, [isTerminalSession, placeholder])
@@ -227,7 +227,7 @@ Mensagem atual: ${finalMessage}`
                 <div className="flex h-2 w-2 items-center justify-center">
                   <div className="h-full w-full rounded-full bg-blue-500" />
                 </div>
-                Claude Code SDK - Somente Leitura
+                Agente SutHub • Claude
               </span>
             </div>
             <span>

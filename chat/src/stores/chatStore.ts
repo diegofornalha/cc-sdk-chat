@@ -379,7 +379,7 @@ const useChatStore = create<ChatStore>()(
                                     sessionData.title?.includes('Claude Code');
         
         const sessionTitle = isClaudeCodeSession 
-          ? `Claude Code SDK - Somente Leitura`
+          ? `Agente SutHub • Claude`
           : sessionData.title || `Sessão ${sessionId.slice(-8)}`;
         
         const newSession: Session = {

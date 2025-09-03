@@ -483,6 +483,11 @@ export function ChatMessage({
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
                   {role === 'user' ? 'Você' : (() => {
+                    // Se já tem um sessionTitle customizado (como "Agente SutHub • Claude"), usa ele direto
+                    if (sessionTitle && sessionTitle.includes('Agente SutHub')) {
+                      return sessionTitle;
+                    }
+                    // Para outros casos, usa o formato padrão
                     const baseLabel = 'Claude';
                     if (sessionTitle && sessionTitle !== sessionId) return `${baseLabel} • ${sessionTitle}`;
                     if (sessionId && !sessionId.startsWith('temp-') && !sessionId.startsWith('project-')) {
