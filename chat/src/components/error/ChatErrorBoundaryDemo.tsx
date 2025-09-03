@@ -5,24 +5,23 @@ import { ChatErrorBoundary } from './ChatErrorBoundary';
 import { ErrorTestComponent } from './ErrorTestComponent';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { toast } from 'sonner';
 
 export const ChatErrorBoundaryDemo: React.FC = () => {
   const [sessionId] = React.useState('demo-session-123');
 
   const handleErrorRecovery = React.useCallback(() => {
     console.log('🔄 Demo: Error recovery executado');
-    toast.success('Recovery executado com sucesso!');
+    console.log('Recovery executado com sucesso!');
   }, []);
 
   const handlePreserveSession = React.useCallback(() => {
     console.log('💾 Demo: Sessão preservada');
-    toast.success('Sessão preservada com sucesso!');
+    console.log('Sessão preservada com sucesso!');
   }, []);
 
   const handleTriggerError = React.useCallback((type: string) => {
     console.log(`🚨 Demo: Triggering ${type} error`);
-    toast.info(`Triggering ${type} error...`);
+    console.log(`Triggering ${type} error...`);
   }, []);
 
   return (

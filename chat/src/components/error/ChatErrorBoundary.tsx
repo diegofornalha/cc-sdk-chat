@@ -4,7 +4,6 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { AlertTriangle, RefreshCw, MessageSquare, Save, Router } from 'lucide-react';
-import { toast } from 'sonner';
 
 interface Props {
   children: ReactNode;
@@ -161,7 +160,7 @@ export class ChatErrorBoundary extends Component<Props, State> {
         (window as any).__chatTimers = [];
       }
 
-      toast.info('🔄 Recuperando chat...');
+      console.log('🔄 Recuperando chat...');
 
       setTimeout(() => {
         this.setState(prevState => ({
@@ -173,7 +172,7 @@ export class ChatErrorBoundary extends Component<Props, State> {
         }));
 
         this.props.onErrorRecovery?.();
-        toast.success('✅ Chat recuperado!');
+        console.log('✅ Chat recuperado!');
       }, 2000);
 
     } catch (recoveryError) {
@@ -192,7 +191,7 @@ export class ChatErrorBoundary extends Component<Props, State> {
     }));
 
     this.props.onErrorRecovery?.();
-    toast.info('🔄 Tentando novamente...');
+    console.log('🔄 Tentando novamente...');
   };
 
   private handlePreserveSession = () => {
@@ -208,13 +207,13 @@ export class ChatErrorBoundary extends Component<Props, State> {
         };
         
         localStorage.setItem(sessionKey, JSON.stringify(backupData));
-        toast.success('💾 Sessão preservada!');
+        console.log('💾 Sessão preservada!');
       }
 
       this.props.onPreserveSession?.();
     } catch (error) {
       console.error('Erro ao preservar sessão:', error);
-      toast.error('Erro ao preservar sessão');
+      console.error('Erro ao preservar sessão');
     }
   };
 

@@ -12,7 +12,6 @@ import { Card } from '../ui/card'
 import { 
   Settings, 
   Download, 
-  Upload,
   RefreshCw,
   Trash2,
   Bot
@@ -20,7 +19,6 @@ import {
 import useChatStore, { SessionConfig } from '@/stores/chatStore'
 import ChatAPI from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { Toaster, toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
 interface ChatInterfaceProps {
@@ -124,11 +122,23 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
 
   // Adiciona chunk à fila de digitação
   const addToTypingQueue = React.useCallback((content: string) => {
+    console.log('📝 [TYPING QUEUE] Adicionando à fila:', {
+      content: content.substring(0, 30),
+      isTyping,
+      queueLength: typingQueueRef.current.length
+    })
+    
     typingQueueRef.current.push(content)
     
     // Se não está digitando, inicia processo
     if (!isTyping && typingQueueRef.current.length === 1) {
+      console.log('▶️ [TYPING QUEUE] Iniciando processamento da fila')
       processTypingQueue()
+    } else {
+      console.log('⏸️ [TYPING QUEUE] Fila não iniciada:', {
+        isTyping,
+        queueLength: typingQueueRef.current.length
+      })
     }
   }, [isTyping, processTypingQueue])
 
@@ -210,7 +220,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
         setStreaming(false)
         setStreamingContent('')
         setProcessing(false)
-        toast.error('Erro no streaming - Estados limpos')
+        console.error('Erro no streaming - Estados limpos')
       }
     }
 
@@ -249,13 +259,13 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
         // Verifica se é continuação (1 arquivo) ou múltiplas sessões
         const sessionCount = sessions.size
         if (sessionCount === 1) {
-          toast.success(`💬 Continuando conversa do Terminal`)
+          console.log(`💬 Continuando conversa do Terminal`)
         } else {
-          toast.success(`📋 Histórico unificado: ${sessionCount} sessões carregadas`)
+          console.log(`📋 Histórico unificado: ${sessionCount} sessões carregadas`)
         }
       }).catch(error => {
         console.error('❌ Erro ao carregar histórico cruzado:', error)
-        toast.error('Erro ao carregar histórico completo')
+        console.error('Erro ao carregar histórico completo')
       })
     }
   }, [sessionData, loadExternalSession, loadCrossSessionHistory])
@@ -295,7 +305,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
   const handleNewSession = (config?: SessionConfig) => {
     const sessionId = createSession(config)
     setActiveSession(sessionId)
-    toast.success('Nova sessão criada')
+    console.log('Nova sessão criada')
   }
 
   const handleSendMessage = async (content: string) => {
@@ -325,18 +335,61 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
     setStreaming(true)
     setStreamingContent('')
     setProcessing(true)
+    
+    console.log('🚀 [DEBUG] Iniciando envio de mensagem:', {
+      content: content.substring(0, 50),
+      sessionId: currentSessionId,
+      timestamp: new Date().toISOString()
+    })
 
     try {
       let currentContent = ''
       let tools: string[] = []
       let isFirstTextChunk = true
+      let chunkCount = 0
 
       await api.sendMessage(
         content,
         (data) => {
+          chunkCount++
+          console.log(`📊 [DEBUG] Chunk #${chunkCount} recebido:`, {
+            type: data.type,
+            hasContent: !!data.content,
+            contentLength: data.content?.length || 0,
+            sessionId: data.session_id
+          })
           switch (data.type) {
             case 'session_migrated':
-              // Processado automaticamente pelo sistema de migração existente
+              console.log('🔄 [DEBUG] Session migrated:', {
+                oldSession: currentSessionId,
+                newSession: data.session_id
+              })
+              
+              // IMPORTANTE: Atualiza o sessionId atual IMEDIATAMENTE
+              if (data.session_id && data.session_id !== currentSessionId) {
+                // Se a sessão mudou, precisamos:
+                // 1. Atualizar a referência local
+                currentSessionId = data.session_id
+                
+                // 2. Atualizar o estado global
+                setActiveSession(data.session_id)
+                
+                // 3. Se a sessão antiga era temporária, fazer migração
+                if (activeSessionId?.startsWith('temp-')) {
+                  migrateToRealSession(data.session_id)
+                }
+                
+                // 4. Atualizar a URL se necessário
+                const currentPath = window.location.pathname
+                if (!currentPath.includes(data.session_id)) {
+                  const projectPath = '-home-suthub--claude-api-claude-code-app-cc-sdk-chat-api'
+                  const newUrl = `/${projectPath}/${data.session_id}`
+                  router.push(newUrl)
+                  console.log('📍 [DEBUG] URL atualizada para:', newUrl)
+                }
+                
+                console.log('✅ [DEBUG] SessionId atualizado com sucesso')
+              }
               break
               
             case 'processing':
@@ -346,6 +399,11 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
               
             case 'text_chunk':
             case 'assistant_text':
+              console.log('✏️ [DEBUG] Texto recebido:', {
+                content: data.content?.substring(0, 30),
+                isFirstChunk: isFirstTextChunk
+              })
+              
               // Para o indicador "Processando..." no primeiro chunk de texto
               if (isFirstTextChunk) {
                 setProcessing(false)
@@ -354,8 +412,10 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
               
               // Adiciona à fila de digitação em vez de mostrar direto
               if (data.content) {
+                console.log('⌨️ [DEBUG] Adicionando à fila de digitação:', data.content.substring(0, 30))
                 addToTypingQueue(data.content)
                 currentContent += data.content
+                console.log('📝 [DEBUG] Conteúdo acumulado:', currentContent.length, 'caracteres')
               }
               break
             
@@ -365,7 +425,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
                 const toolMsg = `\n📦 Usando ferramenta: ${data.tool}\n`
                 addToTypingQueue(toolMsg)
                 currentContent += toolMsg
-                toast.info(`Usando ferramenta: ${data.tool}`)
+                console.log(`Usando ferramenta: ${data.tool}`)
               }
               break
               
@@ -374,6 +434,13 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
               break
             
             case 'result':
+              console.log('🏁 [DEBUG] Result recebido:', {
+                sessionId: data.session_id,
+                currentSessionId: currentSessionId,
+                contentLength: currentContent.length,
+                hasTokens: !!(data.input_tokens || data.output_tokens)
+              })
+              
               // MIGRAÇÃO IMEDIATA: SDK retornou session_id real
               if (data.session_id) {
                 // SEMPRE migra se a sessão atual é temporária
@@ -401,7 +468,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
                     const projectPath = '-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
                     const newUrl = `/${projectPath}/${data.session_id}`
                     router.push(newUrl)
-                    toast.success(`✅ Sessão real criada!`)
+                    console.log(`✅ Sessão real criada!`)
                   }
                 } else if (data.session_id !== currentSessionId) {
                   // Sessão já é real mas diferente - apenas atualiza
@@ -414,6 +481,12 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
               
               // Adiciona mensagem completa do assistente
               if (currentContent && finalSessionId) {
+                console.log('💬 [DEBUG] Adicionando mensagem do assistente:', {
+                  sessionId: finalSessionId,
+                  contentLength: currentContent.length,
+                  content: currentContent.substring(0, 50) + '...'
+                })
+                
                 addMessage(finalSessionId, {
                   role: 'assistant',
                   content: currentContent,
@@ -424,6 +497,14 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
                   },
                   cost: data.cost_usd,
                   tools: tools.length > 0 ? tools : undefined
+                })
+                
+                console.log('✅ [DEBUG] Mensagem adicionada com sucesso')
+              } else {
+                console.warn('⚠️ [DEBUG] Não foi possível adicionar mensagem:', {
+                  hasContent: !!currentContent,
+                  contentLength: currentContent?.length,
+                  sessionId: finalSessionId
                 })
               }
               
@@ -439,13 +520,20 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
           }
         },
         (error) => {
+          console.error('❌ [DEBUG] Erro no streaming:', error)
           // Aguarda digitação terminar antes de mostrar erro
           waitForTypingToFinish(() => {
-            toast.error(`Erro: ${error}`)
+            console.error(`Erro: ${error}`)
             setProcessing(false)
           })
         },
         () => {
+          console.log('✅ [DEBUG] Streaming completo:', {
+            totalChunks: chunkCount,
+            contentLength: currentContent.length,
+            timestamp: new Date().toISOString()
+          })
+          
           // Aguarda digitação terminar antes de finalizar streaming
           waitForTypingToFinish(() => {
             setStreaming(false)
@@ -457,7 +545,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
     } catch (error) {
       // Aguarda digitação terminar antes de mostrar erro
       waitForTypingToFinish(() => {
-        toast.error('Erro ao enviar mensagem')
+        console.error('Erro ao enviar mensagem')
         setStreaming(false)
         setStreamingContent('')
         setProcessing(false)
@@ -474,14 +562,14 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
       setStreaming(false)
       setStreamingContent('')
       setProcessing(false)
-      toast.info('Resposta interrompida')
+      console.log('Resposta interrompida')
     } catch (error) {
       // Mesmo se houver erro na interrupção da API, limpa os estados locais
       clearTypingQueue()
       setStreaming(false)
       setStreamingContent('')
       setProcessing(false)
-      toast.error('Erro ao interromper')
+      console.error('Erro ao interromper')
     }
   }
 
@@ -491,9 +579,9 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
     try {
       await api.clearSession()
       clearSession(activeSessionId)
-      toast.success('Sessão limpa')
+      console.log('Sessão limpa')
     } catch (error) {
-      toast.error('Erro ao limpar sessão')
+      console.error('Erro ao limpar sessão')
     }
   }
 
@@ -510,7 +598,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
     linkElement.setAttribute('download', exportFileDefaultName)
     linkElement.click()
     
-    toast.success('Sessão exportada')
+    console.log('Sessão exportada')
   }
 
   // Funções de recovery para ChatErrorBoundary
@@ -529,7 +617,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
       }
     }
     
-    toast.info('♻️ Chat recuperado - Estados limpos')
+    console.log('♻️ Chat recuperado - Estados limpos')
   }
 
   const handlePreserveSession = () => {
@@ -558,10 +646,10 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
       linkElement.setAttribute('download', exportFileDefaultName)
       linkElement.click()
       
-      toast.success('💾 Sessão preservada e exportada!')
+      console.log('💾 Sessão preservada e exportada!')
     } catch (error) {
       console.error('Erro ao preservar sessão:', error)
-      toast.error('Erro ao preservar sessão')
+      console.error('Erro ao preservar sessão')
     }
   }
 
@@ -581,13 +669,12 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
     const newSessionId = createReplacementSession();
     if (newSessionId) {
       setActiveSession(newSessionId);
-      toast.success('Nova sessão criada após erro');
+      console.log('Nova sessão criada após erro');
     }
   }, [createReplacementSession, setActiveSession]);
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <Toaster position="top-right" />
       
       
       {/* Header */}
@@ -641,17 +728,17 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => toast.info('Importação em desenvolvimento')}
-                title="Importar sessão"
+                onClick={() => window.location.reload()}
+                title="Atualizar página"
               >
-                <Upload className="h-5 w-5" />
+                <RefreshCw className="h-5 w-5" />
               </Button>
             )}
             
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => toast.info('Configurações em desenvolvimento')}
+              onClick={() => console.log('Configurações em desenvolvimento')}
               title="Configurações"
             >
               <Settings className="h-5 w-5" />
@@ -666,7 +753,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
           onSessionSelect={setActiveSession}
           onSessionClose={deleteSession}
           onNewSession={() => setShowConfigModal(true)}
-          onAnalytics={() => toast.info('Analytics em desenvolvimento')}
+          onAnalytics={() => console.log('Analytics em desenvolvimento')}
         />
       </header>
 
@@ -783,7 +870,7 @@ export function ChatInterface({ sessionData, readOnly = false }: ChatInterfacePr
                         onClick={() => {
                           if (activeSessionId) {
                             deleteSession(activeSessionId)
-                            toast.success('Sessão deletada')
+                            console.log('Sessão deletada')
                           }
                         }}
                         disabled={isStreaming}

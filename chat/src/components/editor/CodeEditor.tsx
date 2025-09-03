@@ -12,7 +12,6 @@ import {
   Check
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
 
 interface CodeEditorProps {
   value: string
@@ -55,12 +54,12 @@ export function CodeEditor({
     await navigator.clipboard.writeText(value)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-    toast.success('Código copiado')
+    console.log('Código copiado')
   }
 
   const handleSave = () => {
     if (onChange) {
-      toast.success('Arquivo salvo')
+      console.log('Arquivo salvo')
     }
   }
 
@@ -72,7 +71,7 @@ export function CodeEditor({
     a.download = fileName || `code.${language}`
     a.click()
     URL.revokeObjectURL(url)
-    toast.success('Arquivo baixado')
+    console.log('Arquivo baixado')
   }
 
   const toggleFullscreen = () => {

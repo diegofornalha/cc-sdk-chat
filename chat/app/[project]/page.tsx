@@ -21,7 +21,6 @@ import {
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import useChatStore from '@/stores/chatStore';
 import { cn, formatCost, formatTokens } from '@/lib/utils';
-import { toast } from 'sonner';
 
 interface ProjectSession {
   id: string;
@@ -135,10 +134,10 @@ export default function ProjectDashboardPage() {
         setActiveTab('overview');
       }
 
-      toast.success(`📊 Dashboard carregado: ${sessionsData.length} sessões`);
+      console.log(`📊 Dashboard carregado: ${sessionsData.length} sessões`);
     } catch (error) {
       console.error('Erro ao carregar projeto:', error);
-      toast.error('Erro ao carregar dados do projeto');
+      console.error('Erro ao carregar dados do projeto');
     } finally {
       setIsLoading(false);
     }

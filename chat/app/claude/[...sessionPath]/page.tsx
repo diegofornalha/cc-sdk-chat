@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChatInterface } from '@/components/chat/ChatInterface';
-import { toast } from 'sonner';
 import ChatAPI from '@/lib/api';
 
 export default function SessionPage() {
@@ -48,14 +47,14 @@ export default function SessionPage() {
             localStorage.setItem('claude_session_id', sessionId);
             localStorage.setItem('current_project', project);
 
-            toast.success(`Sessão ${sessionId.slice(-8)} carregada com ${data.messages.length} mensagens`);
+            console.log(`Sessão ${sessionId.slice(-8)} carregada com ${data.messages.length} mensagens`);
           } else {
-            toast.warning('Sessão não encontrada ou vazia');
+            console.warn('Sessão não encontrada ou vazia');
           }
         }
       } catch (error) {
         console.error('Erro ao carregar sessão:', error);
-        toast.error('Erro ao carregar sessão');
+        console.error('Erro ao carregar sessão');
       }
 
       setIsLoading(false);

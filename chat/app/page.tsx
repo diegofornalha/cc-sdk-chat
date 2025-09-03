@@ -5,7 +5,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Bot, FolderOpen, MessageSquare, Clock, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
 
 interface WebSession {
   id: string;
@@ -40,10 +39,10 @@ export default function Home() {
         const data = await response.json();
         
         setProjects(data.projects || []);
-        toast.success(`🤖 ${data.count || 0} projetos Claude Code SDK encontrados`);
+        console.log(`🤖 ${data.count || 0} projetos Claude Code SDK encontrados`);
       } catch (error) {
         console.error('Erro ao carregar projetos Claude Code SDK:', error);
-        toast.error('Erro ao carregar projetos');
+        console.error('Erro ao carregar projetos');
       } finally {
         setLoading(false);
       }

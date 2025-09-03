@@ -51,20 +51,37 @@ class ChatAPI {
     onError?: (error: string) => void,
     onComplete?: () => void
   ): Promise<void> {
-    // Não precisa criar session_id - será obtido via streaming
+    // Debug log
+    console.log('📤 Enviando mensagem:', {
+      message: message.substring(0, 100),
+      sessionId: this.sessionId,
+      url: `${this.baseUrl}/api/chat`,
+      timestamp: new Date().toISOString()
+    });
+
+    const requestBody = {
+      message,
+      session_id: this.sessionId,
+    };
+
+    console.log('📦 Request body:', requestBody);
 
     const response = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        message,
-        session_id: this.sessionId,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log('📥 Response status:', response.status, response.statusText);
+
     if (!response.ok) {
+      console.error('❌ Erro na resposta:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
       throw new Error('Failed to send message');
     }
 
@@ -102,9 +119,27 @@ class ChatAPI {
             try {
               const data = JSON.parse(dataStr) as StreamResponse;
               
+              console.log('📨 SSE data received:', {
+                type: data.type,
+                sessionId: data.session_id,
+                content: data.content ? data.content.substring(0, 50) : undefined,
+                timestamp: new Date().toISOString()
+              });
+              
+              // Atualiza sessionId se recebido
+              if (data.session_id && data.session_id !== this.sessionId) {
+                console.log('🔄 Session ID atualizado:', {
+                  old: this.sessionId,
+                  new: data.session_id
+                });
+                this.sessionId = data.session_id;
+              }
+              
               if (data.type === 'error' && onError) {
+                console.error('❌ Erro no stream:', data.error);
                 onError(data.error || 'Unknown error');
               } else if (data.type === 'done') {
+                console.log('✅ Stream completo');
                 // Marca como completo e chama callback
                 if (onComplete && !completeCalled) {
                   completeCalled = true;
@@ -116,7 +151,7 @@ class ChatAPI {
                 onStream(data);
               }
             } catch (e) {
-              console.error('Failed to parse SSE data:', e);
+              console.error('Failed to parse SSE data:', e, 'Raw data:', dataStr);
             }
           }
         }
