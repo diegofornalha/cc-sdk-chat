@@ -645,7 +645,7 @@ export default function ProjectDashboardPage() {
                                     console.log(`🗑️ Deletando mensagem unificada - Role: ${message.role}, Index: ${originalIndex}`);
                                     handleDeleteMessage(message.sessionOrigin, originalIndex);
                                   }}
-                                  className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 hover:scale-110 z-50"
+                                  className="absolute right-2 top-12 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 hover:scale-110 z-50"
                                   title={`Deletar mensagem ${message.role === 'user' ? 'do usuário' : 'do Claude'}`}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -835,7 +835,7 @@ export default function ProjectDashboardPage() {
                                       console.log(`🗑️ Deletando mensagem ${index} - Role: ${message.role}`);
                                       handleDeleteMessage(session.id, index);
                                     }}
-                                    className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 hover:scale-110 z-50"
+                                    className="absolute right-2 top-12 opacity-0 group-hover:opacity-100 transition-all duration-200 p-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 hover:scale-110 z-50"
                                     title={`Deletar mensagem ${message.role === 'user' ? 'do usuário' : 'do Claude'}`}
                                   >
                                     <Trash2 className="h-4 w-4" />
