@@ -4,9 +4,16 @@ import React, { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 
+interface SessionData {
+  projectPath: string;
+  sessionId: string;
+  activeSessionId: string;
+  messages?: any[];
+}
+
 export default function SessionViewerPage() {
   const params = useParams();
-  const [sessionData, setSessionData] = React.useState(null);
+  const [sessionData, setSessionData] = React.useState<SessionData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
 
   const resolveSessionId = async (sessionSlug: string, projectName: string) => {

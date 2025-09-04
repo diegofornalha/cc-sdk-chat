@@ -91,7 +91,7 @@ export class ChatErrorBoundary extends Component<Props, State> {
 
   private analyzeError(error: Error, errorInfo: ErrorInfo): ChatErrorDetails {
     const errorMessage = error.message.toLowerCase();
-    const componentStack = errorInfo.componentStack.toLowerCase();
+    const componentStack = errorInfo.componentStack?.toLowerCase() || '';
 
     // Detecta tipo de erro baseado na mensagem e stack
     const isStreamingError = errorMessage.includes('stream') || 

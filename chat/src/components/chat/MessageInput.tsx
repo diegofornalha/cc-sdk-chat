@@ -39,7 +39,7 @@ export function MessageInput({
       sessionId?.startsWith('project-') ||
       sessionTitle?.includes('Terminal') ||
       sessionTitle?.includes('sessões') ||
-      (isTerminalProject && sessionId?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/))
+      (isTerminalProject && !!sessionId?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/))
     )
   }, [sessionId, sessionTitle])
 

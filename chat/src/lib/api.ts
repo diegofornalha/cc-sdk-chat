@@ -232,11 +232,7 @@ class ChatAPI {
       throw new Error('Failed to delete session');
     }
 
-    this.sessionId = null;
-  }
-
-  getSessionId(): string | null {
-    return this.sessionId;
+    this.sessionId = this.FIXED_SESSION_ID;
   }
 }
 

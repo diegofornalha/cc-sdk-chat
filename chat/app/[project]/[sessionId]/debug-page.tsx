@@ -5,9 +5,15 @@ import { useParams } from 'next/navigation';
 import { ChatInterface } from '@/components/chat/ChatInterface';
 import { DebugConsole } from '@/components/debug/ConsoleDebugger';
 
+interface SessionData {
+  projectPath: string;
+  sessionId: string;
+  activeSessionId: string;
+}
+
 export default function DebugSessionPage() {
   const params = useParams();
-  const [sessionData, setSessionData] = React.useState(null);
+  const [sessionData, setSessionData] = React.useState<SessionData | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [debugMode, setDebugMode] = useState(true);
 
@@ -60,7 +66,8 @@ export default function DebugSessionPage() {
         console.log(`✅ [${method}] ${url} - ${response.status} (${duration}ms)`);
         
         // Para SSE, intercepta o stream
-        if (url.includes('/api/chat') && method === 'POST') {
+        const urlString = typeof url === 'string' ? url : url.toString();
+        if (urlString.includes('/api/chat') && method === 'POST') {
           const clonedResponse = response.clone();
           
           // Processa o stream para debug
@@ -137,6 +144,7 @@ export default function DebugSessionPage() {
 
   useEffect(() => {
     async function loadSession() {
+      if (!params) return;
       const projectName = decodeURIComponent(params.project as string);
       const sessionSlug = decodeURIComponent(params.sessionId as string);
       
@@ -185,10 +193,11 @@ export default function DebugSessionPage() {
     <>
       <div className="relative">
         <ChatInterface
-          projectPath={sessionData.projectPath}
-          sessionId={sessionData.sessionId}
-          activeSessionId={sessionData.activeSessionId}
-          showProjectName={true}
+          sessionData={{
+            projectPath: sessionData.projectPath,
+            sessionId: sessionData.sessionId,
+            activeSessionId: sessionData.activeSessionId
+          }}
         />
         
         {/* Painel de Debug */}

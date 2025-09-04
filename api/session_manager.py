@@ -52,8 +52,8 @@ class ClaudeCodeSessionManager:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.INFO)
         
-        # Inicia task scheduler
-        asyncio.create_task(self._start_scheduler())
+        # Task scheduler será iniciado quando necessário
+        self._scheduler_started = False
         
     async def create_new_claude_session(self) -> Optional[str]:
         """
@@ -170,6 +170,12 @@ class ClaudeCodeSessionManager:
     # ===========================================
     # OTIMIZAÇÕES DE GERENCIAMENTO DE SESSÃO
     # ===========================================
+    
+    async def ensure_scheduler_started(self):
+        """Garante que o scheduler esteja iniciado."""
+        if not self._scheduler_started:
+            self._scheduler_started = True
+            await self._start_scheduler()
     
     async def _start_scheduler(self):
         """Inicia o task scheduler para limpeza periódica."""

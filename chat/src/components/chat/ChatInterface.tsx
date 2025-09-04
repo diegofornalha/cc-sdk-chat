@@ -895,7 +895,7 @@ export function ChatInterface({
       <div className="flex flex-1 overflow-hidden">
         {/* Chat Area - Protegida por ChatErrorBoundary */}
         <ChatErrorBoundary
-          sessionId={activeSessionId}
+          sessionId={activeSessionId || undefined}
           onErrorRecovery={handleChatErrorRecovery}
           onPreserveSession={handlePreserveSession}
         >

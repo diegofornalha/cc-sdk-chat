@@ -85,7 +85,7 @@ class ClaudeHandler:
         
         # Task de manutenção do pool
         self.pool_maintenance_task = None
-        asyncio.create_task(self._start_pool_maintenance())
+        self._pool_maintenance_started = False
         
         self.logger.info(
             "Claude Handler inicializado com pool de conexões",
@@ -451,6 +451,12 @@ class ClaudeHandler:
     # ===========================================
     # POOL DE CONEXÕES OTIMIZADO
     # ===========================================
+    
+    async def ensure_pool_maintenance_started(self):
+        """Garante que a manutenção do pool esteja iniciada."""
+        if not self._pool_maintenance_started:
+            self._pool_maintenance_started = True
+            await self._start_pool_maintenance()
     
     async def _start_pool_maintenance(self):
         """Inicia tarefa de manutenção do pool de conexões."""

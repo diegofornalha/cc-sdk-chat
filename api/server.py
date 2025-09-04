@@ -351,6 +351,14 @@ session_manager = ClaudeCodeSessionManager()
 session_validator = SessionValidator()
 rate_limiter = RateLimitManager(redis_url=os.getenv("REDIS_URL"))
 
+# Evento de startup para inicializar tarefas assíncronas
+@app.on_event("startup")
+async def startup_event():
+    """Inicializa tarefas assíncronas no startup do servidor."""
+    await claude_handler.ensure_pool_maintenance_started()
+    await session_manager.ensure_scheduler_started()
+    logger.info("Tarefas assíncronas iniciadas com sucesso")
+
 # Funções utilitárias para monitoramento
 def get_system_metrics() -> Dict[str, Any]:
     """Coleta métricas do sistema."""

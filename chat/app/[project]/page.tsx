@@ -381,7 +381,7 @@ export default function ProjectDashboardPage() {
         if (typeof msg.content === 'string') {
           content = msg.content;
         } else if (Array.isArray(msg.content)) {
-          content = msg.content.map(item => {
+          content = msg.content.map((item: any) => {
             if (typeof item === 'string') return item;
             if (item.type === 'text') return item.text;
             if (item.type === 'tool_use') return `[Ferramenta: ${item.name}]`;

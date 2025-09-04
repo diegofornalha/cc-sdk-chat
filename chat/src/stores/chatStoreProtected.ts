@@ -264,7 +264,8 @@ const useChatStoreProtected = create<ChatStore>()(
             let tempSession = null
             let tempSessionId = null
             
-            for (const [sessionId, session] of Array.from(state.sessions)) {
+            const sessionsArray = Array.from(state.sessions as Map<string, any>);
+            for (const [sessionId, session] of sessionsArray) {
               if (sessionId.startsWith('temp-') || sessionId === 'awaiting-real-session') {
                 tempSession = session
                 tempSessionId = sessionId
@@ -399,7 +400,7 @@ const useChatStoreProtected = create<ChatStore>()(
               throw new Error(`Session not found: ${sessionId}`)
             }
             
-            const message = session.messages.find(m => m.id === messageId)
+            const message = session.messages.find((m: any) => m.id === messageId)
             if (!message) {
               throw new Error(`Message not found: ${messageId}`)
             }
@@ -423,7 +424,7 @@ const useChatStoreProtected = create<ChatStore>()(
             }
             
             const initialLength = session.messages.length
-            session.messages = session.messages.filter(m => m.id !== messageId)
+            session.messages = session.messages.filter((m: any) => m.id !== messageId)
             
             if (session.messages.length === initialLength) {
               console.warn(`Message not found for deletion: ${messageId}`)

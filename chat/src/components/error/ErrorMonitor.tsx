@@ -17,7 +17,7 @@ interface ErrorMonitorProps {
 const ErrorMonitor: React.FC<ErrorMonitorProps> = ({
   position = 'top-right',
   autoHide = true,
-  showRecoveredErrors = false
+  showRecoveredErrors: initialShowRecovered = false
 }) => {
   const {
     errors,
@@ -28,6 +28,8 @@ const ErrorMonitor: React.FC<ErrorMonitorProps> = ({
     hasUnrecoveredErrors,
     criticalErrors
   } = useStoreErrors()
+  
+  const [showRecoveredErrors, setShowRecoveredErrors] = useState(initialShowRecovered)
   
   const {
     markErrorAsRecovered,

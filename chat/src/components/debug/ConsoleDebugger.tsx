@@ -177,14 +177,14 @@ class ConsoleDebugger {
 }
 
 export function useConsoleDebugger() {
-  const debugger = ConsoleDebugger.getInstance()
+  const debugInstance = ConsoleDebugger.getInstance()
   
   useEffect(() => {
     // Log inicial
-    debugger.addLog('info', 'System', 'Console Debugger initialized')
+    debugInstance.addLog('info', 'System', 'Console Debugger initialized')
     
     // Log de informações do navegador
-    debugger.addLog('info', 'Browser', navigator.userAgent, {
+    debugInstance.addLog('info', 'Browser', navigator.userAgent, {
       platform: navigator.platform,
       language: navigator.language,
       cookieEnabled: navigator.cookieEnabled,
@@ -192,7 +192,7 @@ export function useConsoleDebugger() {
     })
 
     // Log de URL atual
-    debugger.addLog('info', 'Location', window.location.href, {
+    debugInstance.addLog('info', 'Location', window.location.href, {
       pathname: window.location.pathname,
       search: window.location.search,
       hash: window.location.hash
@@ -200,14 +200,14 @@ export function useConsoleDebugger() {
 
     // Monitor de mudanças de rota
     const handleRouteChange = () => {
-      debugger.addLog('info', 'Router', `Navigation to ${window.location.pathname}`)
+      debugInstance.addLog('info', 'Router', `Navigation to ${window.location.pathname}`)
     }
 
     window.addEventListener('popstate', handleRouteChange)
     
     // Monitor de erros globais
     const handleError = (event: ErrorEvent) => {
-      debugger.addLog('error', 'Global Error', event.message, {
+      debugInstance.addLog('error', 'Global Error', event.message, {
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
@@ -219,7 +219,7 @@ export function useConsoleDebugger() {
 
     // Monitor de promessas rejeitadas
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-      debugger.addLog('error', 'Unhandled Promise', 'Promise rejected', event.reason)
+      debugInstance.addLog('error', 'Unhandled Promise', 'Promise rejected', event.reason)
     }
     
     window.addEventListener('unhandledrejection', handleUnhandledRejection)
@@ -229,15 +229,15 @@ export function useConsoleDebugger() {
       window.removeEventListener('error', handleError)
       window.removeEventListener('unhandledrejection', handleUnhandledRejection)
     }
-  }, [debugger])
+  }, [debugInstance])
 
-  return debugger
+  return debugInstance
 }
 
 // Componente para mostrar logs em tela
 export function DebugConsole() {
   const consoleRef = useRef<HTMLDivElement>(null)
-  const debugger = useConsoleDebugger()
+  const debugInstance = useConsoleDebugger()
   
   useEffect(() => {
     const handleLogs = (logs: DebugLog[]) => {
@@ -246,14 +246,14 @@ export function DebugConsole() {
       }
     }
 
-    debugger.subscribe(handleLogs)
+    debugInstance.subscribe(handleLogs)
     
     return () => {
-      debugger.unsubscribe(handleLogs)
+      debugInstance.unsubscribe(handleLogs)
     }
-  }, [debugger])
+  }, [debugInstance])
 
-  const logs = debugger.getLogs()
+  const logs = debugInstance.getLogs()
 
   const getLogColor = (type: DebugLog['type']) => {
     switch (type) {
@@ -271,13 +271,13 @@ export function DebugConsole() {
         <span className="text-white text-sm font-mono">Debug Console</span>
         <div className="flex gap-2">
           <button
-            onClick={() => debugger.clearLogs()}
+            onClick={() => debugInstance.clearLogs()}
             className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
           >
             Clear
           </button>
           <button
-            onClick={() => debugger.exportLogs()}
+            onClick={() => debugInstance.exportLogs()}
             className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
           >
             Export

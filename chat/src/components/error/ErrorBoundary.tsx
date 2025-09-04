@@ -50,7 +50,6 @@ class ErrorBoundary extends Component<Props, State> {
     const errorStore = useErrorStore.getState()
     const errorId = errorStore.captureError(error, {
       actionName: 'react-component-error',
-      context: this.props.context || 'unknown',
       severity: 'critical',
       type: 'unknown'
     })
@@ -298,10 +297,10 @@ export const withErrorBoundary = <P extends object>(
 // 🔧 UTILS PARA TRATAMENTO DE ERROS ASSÍNCRONOS
 // ════════════════════════════════════════════════════════════════
 
-export const handleAsyncError = async <T>(
+export async function handleAsyncError<T>(
   asyncOperation: () => Promise<T>,
   context: string = 'async-operation'
-): Promise<T | null> => {
+): Promise<T | null> {
   try {
     return await asyncOperation()
   } catch (error) {
@@ -317,11 +316,11 @@ export const handleAsyncError = async <T>(
   }
 }
 
-export const safeExecute = <T>(
+export function safeExecute<T>(
   operation: () => T,
   fallback: T,
   context: string = 'safe-execute'
-): T => {
+): T {
   try {
     return operation()
   } catch (error) {
