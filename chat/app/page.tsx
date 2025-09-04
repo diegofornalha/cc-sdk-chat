@@ -169,7 +169,7 @@ export default function Home() {
                           </span>
                         ) : null}
                         <span className="text-xs text-muted-foreground">
-                          {project.sessions_count} sessão{project.sessions_count > 1 ? 'ões' : ''}
+                          {project.sessions_count} {project.sessions_count === 1 ? 'sessão' : 'sessões'}
                         </span>
                       </div>
                     </div>

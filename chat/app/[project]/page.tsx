@@ -431,7 +431,7 @@ export default function ProjectDashboardPage() {
             <div>
               <h1 className="text-xl font-semibold">Dashboard do Projeto</h1>
               <p className="text-sm text-muted-foreground">
-                {projectSessions.length} sessões • {totalStats.messages} mensagens
+                {projectSessions.length} {projectSessions.length === 1 ? 'sessão' : 'sessões'} • {totalStats.messages} {totalStats.messages === 1 ? 'mensagem' : 'mensagens'}
               </p>
             </div>
           </div>
@@ -601,7 +601,7 @@ export default function ProjectDashboardPage() {
                     <div className="mb-6">
                       <h2 className="text-lg font-semibold mb-2">Visão Geral do Projeto</h2>
                       <p className="text-sm text-muted-foreground">
-                        Histórico completo de todas as {projectSessions.length} sessões
+                        Histórico completo de {projectSessions.length === 1 ? 'uma sessão' : `todas as ${projectSessions.length} sessões`}
                       </p>
                     </div>
 
