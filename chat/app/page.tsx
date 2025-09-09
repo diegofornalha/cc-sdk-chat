@@ -163,9 +163,13 @@ export default function Home() {
                           <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
                             🏠 Terminal
                           </span>
-                        ) : project.name.includes('-claude-api-claude-code-app-cc-sdk-chat') ? (
+                        ) : project.name.includes('-claude-api-claude-code-app-cc-sdk-chat-api') ? (
                           <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
                             🚀 Projeto
+                          </span>
+                        ) : project.name.includes('-claude-api-claude-code-app-cc-sdk-chat') ? (
+                          <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs font-medium">
+                            🏠 Terminal
                           </span>
                         ) : null}
                         <span className="text-xs text-muted-foreground">

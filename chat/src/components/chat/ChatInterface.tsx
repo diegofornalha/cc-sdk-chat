@@ -812,7 +812,7 @@ export function ChatInterface({
                   Claude Code SDK
                 </span>
                 {window.location.pathname.includes(
-                  "-home-suthub--claude-api-claude-code-app",
+                  "-home-suthub--claude-api-claude-code-app-cc-sdk-chat-api",
                 ) ? (
                   <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
                     🚀 Projeto
