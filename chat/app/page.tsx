@@ -35,14 +35,24 @@ export default function Home() {
       try {
         // Carregar apenas projetos Claude Code SDK
         const { config } = await import('@/lib/config');
-        const response = await fetch(`${config.getApiUrl()}/api/discover-projects`);
+        const apiUrl = config.getApiUrl();
+        console.log('🔍 Buscando projetos de:', `${apiUrl}/api/analytics/projects`);
+        
+        const response = await fetch(`${apiUrl}/api/analytics/projects`);
+        console.log('📡 Status da resposta:', response.status);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
+        console.log('📦 Dados recebidos:', data);
         
         setProjects(data.projects || []);
-        console.log(`🤖 ${data.count || 0} projetos Claude Code SDK encontrados`);
+        console.log(`🤖 ${data.projects?.length || 0} projetos Claude Code SDK encontrados`);
       } catch (error) {
-        console.error('Erro ao carregar projetos Claude Code SDK:', error);
-        console.error('Erro ao carregar projetos');
+        console.error('❌ Erro ao carregar projetos Claude Code SDK:', error);
+        setProjects([]); // Definir array vazio em caso de erro
       } finally {
         setLoading(false);
       }

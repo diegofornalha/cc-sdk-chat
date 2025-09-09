@@ -27,6 +27,18 @@ from rate_limiter import RateLimitManager
 from stability_monitor import stability_monitor, CircuitBreakerConfig, CircuitState
 from fallback_system import fallback_system, FallbackConfig, FallbackStrategy
 
+# Importar novas rotas
+try:
+    from session_routes import router as session_router
+    from logging_routes import router as logging_router
+    from projects_routes import router as projects_router
+    ENHANCED_ROUTES_AVAILABLE = True
+except ImportError:
+    ENHANCED_ROUTES_AVAILABLE = False
+    session_router = None
+    logging_router = None
+    projects_router = None
+
 # Configuração de logging estruturado
 setup_logging(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -347,6 +359,21 @@ app.add_middleware(
 # Handlers globais
 claude_handler = ClaudeHandler()
 analytics_service = AnalyticsService()
+
+# Registrar rotas adicionais se disponíveis
+if ENHANCED_ROUTES_AVAILABLE:
+    if session_router:
+        app.include_router(session_router)
+        logger.info("✅ Rotas de sessão registradas", 
+                   extra={"event": "routes_registered", "component": "session_routes"})
+    if logging_router:
+        app.include_router(logging_router)
+        logger.info("✅ Rotas de logging registradas",
+                   extra={"event": "routes_registered", "component": "logging_routes"})
+    if projects_router:
+        app.include_router(projects_router)
+        logger.info("✅ Rotas de projetos registradas",
+                   extra={"event": "routes_registered", "component": "projects_routes"})
 session_manager = ClaudeCodeSessionManager()
 session_validator = SessionValidator()
 rate_limiter = RateLimitManager(redis_url=os.getenv("REDIS_URL"))

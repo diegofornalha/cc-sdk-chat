@@ -26,3 +26,6 @@ regex==2023.10.3
 
 # Utilitários
 pathlib==1.0.1
+
+# JWT para autenticação
+pyjwt==2.8.0
