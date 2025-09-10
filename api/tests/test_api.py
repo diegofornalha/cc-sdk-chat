@@ -2,9 +2,15 @@
 """Script de teste para verificar integração com Claude SDK."""
 
 import asyncio
-import aiohttp
 import json
+import pytest
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
 
+# Marca o teste como assíncrono para pytest
+@pytest.mark.asyncio
 async def test_api():
     """Testa a API."""
     base_url = "http://localhost:8989"

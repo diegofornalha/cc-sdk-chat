@@ -12,10 +12,10 @@ import sys
 from pathlib import Path
 
 # Adiciona o diretório da API ao path
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from logging_config import setup_logging, get_contextual_logger, set_request_context, clear_request_context
-from exception_middleware import handle_errors, StreamingErrorHandler
+from utils.logging_config import setup_logging, get_contextual_logger, set_request_context, clear_request_context
+from middleware.exception_middleware import handle_errors, StreamingErrorHandler
 
 def test_logging_configuration():
     """Testa configuração básica de logging."""

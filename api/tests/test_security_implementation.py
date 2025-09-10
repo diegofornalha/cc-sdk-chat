@@ -12,11 +12,16 @@ import time
 from typing import Dict, Any, List
 from pydantic import ValidationError
 
+# Adiciona o diretório da API ao path
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 # Imports das implementações
-from security_models import SecureChatMessage, SecureSessionAction, SecureSessionConfigRequest
-from session_validator import SessionValidator
-from rate_limiter import RateLimitManager, RateLimitRule
-from security_middleware import SecurityValidationError
+from utils.security_models import SecureChatMessage, SecureSessionAction, SecureSessionConfigRequest
+from services.session_validator import SessionValidator
+from middleware.rate_limiter import RateLimitManager, RateLimitRule
+from middleware.security_middleware import SecurityValidationError
 
 
 class SecurityTester:
