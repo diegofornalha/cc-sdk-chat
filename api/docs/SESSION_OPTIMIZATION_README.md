@@ -282,7 +282,7 @@ await handler.session_manager.force_cleanup_all()  # Emergência
 Execute o exemplo completo para validar todas as funcionalidades:
 
 ```bash
-cd /home/suthub/.claude/api-claude-code-app/cc-sdk-chat/api
+cd /.claude/api-claude-code-app/cc-sdk-chat/api
 python session_optimization_example.py
 ```
 

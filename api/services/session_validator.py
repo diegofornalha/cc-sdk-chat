@@ -15,7 +15,7 @@ class SessionValidator:
     """Valida e verifica a existência de sessões reais no sistema."""
     
     def __init__(self):
-        self.project_path = '/home/suthub/.claude/projects/-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
+        self.project_path = '/.claude/projects/-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
         
     def get_real_session_ids(self) -> Set[str]:
         """Retorna conjunto de IDs de sessão que realmente existem no sistema."""

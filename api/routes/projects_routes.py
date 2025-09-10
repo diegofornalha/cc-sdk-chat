@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Rotas para gerenciamento de projetos Claude
-Lista e gerencia projetos salvos em /home/suthub/.claude/projects
+Lista e gerencia projetos salvos em /.claude/projects
 """
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Optional
@@ -14,7 +14,7 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/analytics", tags=["projects"])
 
 # Diretório dos projetos
-PROJECTS_DIR = Path("/home/suthub/.claude/projects")
+PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
 class ProjectInfo(BaseModel):
     """Informações do projeto"""

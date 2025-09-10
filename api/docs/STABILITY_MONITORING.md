@@ -181,7 +181,7 @@ REDIS_URL=redis://localhost:6379
 
 # Servidor
 HOST=127.0.0.1
-PORT=8989
+PORT=8991
 ```
 
 ### Configuração de Circuit Breakers
@@ -239,25 +239,25 @@ fallback_system.register_fallback(
 ### Circuit Breaker Aberto
 ```bash
 # Ver status
-curl http://localhost:8989/health/stability
+curl http://localhost:8991/health/stability
 
 # Resetar se necessário
-curl -X POST http://localhost:8989/health/circuit-breaker/claude_sdk/reset
+curl -X POST http://localhost:8991/health/circuit-breaker/claude_sdk/reset
 ```
 
 ### Cache de Fallbacks Cheio
 ```bash
 # Limpar cache
-curl -X POST http://localhost:8989/health/fallback-cache/clear
+curl -X POST http://localhost:8991/health/fallback-cache/clear
 ```
 
 ### Performance Degradada
 ```bash
 # Check health detalhado
-curl http://localhost:8989/health/detailed
+curl http://localhost:8991/health/detailed
 
 # Métricas básicas
-curl http://localhost:8989/metrics
+curl http://localhost:8991/metrics
 ```
 
 ## 📈 Logs Estruturados

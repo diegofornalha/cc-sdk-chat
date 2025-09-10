@@ -29,14 +29,7 @@ export default function SessionViewerPage() {
       
       try {
         // Buscar sessões do projeto para encontrar o UUID completo
-        const response = await fetch('/api/load-project-history', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            projectPath: `/home/suthub/.claude/projects/${projectName}`,
-            primarySessionId: 'dashboard'
-          })
-        });
+        const response = await fetch(`/api/projects/${projectName}/sessions`);
 
         if (response.ok) {
           const { sessions } = await response.json();

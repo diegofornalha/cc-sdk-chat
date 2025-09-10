@@ -92,7 +92,7 @@ Permissions-Policy: Permissões mínimas
 **Origens Permitidas:**
 ```
 http://localhost:3082
-http://localhost:3000  
+http://localhost:3082  
 http://127.0.0.1:3082
 https://suthub.agentesintegrados.com
 http://suthub.agentesintegrados.com
@@ -141,7 +141,7 @@ LOG_LEVEL=INFO
 
 # Configuração da API
 HOST=127.0.0.1
-PORT=8989
+PORT=8991
 ```
 
 ### Inicialização
@@ -281,18 +281,18 @@ O endpoint `/health/detailed` inclui status de segurança:
 
 ```bash
 # Teste Rate Limiting
-for i in {1..100}; do curl -X POST localhost:8989/api/chat; done
+for i in {1..100}; do curl -X POST localhost:8991/api/chat; done
 
 # Teste XSS
-curl -X POST localhost:8989/api/chat \
+curl -X POST localhost:8991/api/chat \
   -d '{"message": "<script>alert(1)</script>", "session_id": "test"}'
 
 # Teste SQL Injection  
-curl -X POST localhost:8989/api/chat \
+curl -X POST localhost:8991/api/chat \
   -d '{"message": "test; DROP TABLE users--", "session_id": "test"}'
 
 # Teste UUID inválido
-curl -X POST localhost:8989/api/chat \
+curl -X POST localhost:8991/api/chat \
   -d '{"message": "test", "session_id": "invalid-uuid"}'
 ```
 

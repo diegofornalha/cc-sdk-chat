@@ -74,7 +74,7 @@ if ! check_port $API_PORT; then
             echo -e "${GREEN}✓ Usando porta alternativa $API_PORT para API${NC}"
             
             # Atualiza .env.local
-            sed -i "s/NEXT_PUBLIC_API_PORT=.*/NEXT_PUBLIC_API_PORT=$API_PORT/" .env.local
+            sed -i "" "s/NEXT_PUBLIC_API_PORT=.*/NEXT_PUBLIC_API_PORT=$API_PORT/" .env.local
             ;;
         3)
             echo -e "${RED}Cancelado pelo usuário${NC}"
@@ -104,7 +104,7 @@ if ! check_port $FRONTEND_PORT; then
             echo -e "${GREEN}✓ Usando porta alternativa $FRONTEND_PORT para frontend${NC}"
             
             # Atualiza .env.local
-            sed -i "s/NEXT_PUBLIC_FRONTEND_PORT=.*/NEXT_PUBLIC_FRONTEND_PORT=$FRONTEND_PORT/" .env.local
+            sed -i "" "s/NEXT_PUBLIC_FRONTEND_PORT=.*/NEXT_PUBLIC_FRONTEND_PORT=$FRONTEND_PORT/" .env.local
             ;;
         3)
             echo -e "${RED}Cancelado pelo usuário${NC}"
@@ -125,7 +125,7 @@ echo -e "   Frontend: http://localhost:${FRONTEND_PORT}"
 # Inicia API
 echo -e "${YELLOW}🔧 Iniciando API na porta $API_PORT...${NC}"
 cd api
-source /home/suthub/.claude/.venv/bin/activate
+source ../.venv/bin/activate
 nohup uvicorn server:app --host 127.0.0.1 --port $API_PORT --reload > ../logs/api.log 2>&1 &
 API_PID=$!
 cd ..

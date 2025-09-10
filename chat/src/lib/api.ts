@@ -30,21 +30,40 @@ export interface StreamResponse {
 
 class ChatAPI {
   private baseUrl: string;
-  // SOLUÇÃO DEFINITIVA: Session ID FIXO (UUID válido)
-  private readonly FIXED_SESSION_ID = '00000000-0000-0000-0000-000000000001';
-  private sessionId: string = this.FIXED_SESSION_ID;
+  private sessionId: string;
+  // ID fixo para manter histórico unificado (UUID válido especial)
+  private readonly UNIFIED_SESSION_ID = '00000000-0000-0000-0000-000000000001';
+  private readonly USE_UNIFIED_SESSION = true; // Controle para usar sessão unificada
 
   constructor(baseUrl?: string) {
     // Usa a configuração centralizada
     this.baseUrl = baseUrl || config.getApiUrl();
     
-    // SEMPRE usa o session ID fixo
-    this.sessionId = this.FIXED_SESSION_ID;
-    console.log('🎯 Usando Session ID Fixo:', this.sessionId);
-    
-    // Salva no localStorage para consistência
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('current_session_id', this.FIXED_SESSION_ID);
+    // SEMPRE usa sessão unificada com ID fixo
+    if (this.USE_UNIFIED_SESSION) {
+      // Usa ID fixo para manter todo histórico em um único arquivo
+      this.sessionId = this.UNIFIED_SESSION_ID;
+      console.log('📝 Usando Session ID Unificado:', this.sessionId);
+      console.log('💾 Todas as conversas serão salvas no mesmo arquivo JSONL');
+      
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('current_session_id', this.sessionId);
+      }
+    } else {
+      // Modo dinâmico - cada sessão tem seu próprio arquivo
+      if (typeof window !== 'undefined') {
+        const storedSessionId = localStorage.getItem('current_session_id');
+        if (storedSessionId && storedSessionId !== this.UNIFIED_SESSION_ID) {
+          this.sessionId = storedSessionId;
+          console.log('📂 Recuperando Session ID:', this.sessionId);
+        } else {
+          this.sessionId = this.generateSessionId();
+          localStorage.setItem('current_session_id', this.sessionId);
+          console.log('🆕 Novo Session ID gerado:', this.sessionId);
+        }
+      } else {
+        this.sessionId = this.generateSessionId();
+      }
     }
     
     // Debug em desenvolvimento
@@ -53,19 +72,93 @@ class ChatAPI {
     }
   }
 
-
-
-
-  // Método para definir sessionId - IGNORADO: sempre usa o ID fixo
-  setSessionId(sessionId: string | null) {
-    console.log('⚠️ Tentativa de mudar sessionId ignorada. Usando ID fixo:', this.FIXED_SESSION_ID);
-    // NÃO muda o sessionId - sempre usa o fixo
-    this.sessionId = this.FIXED_SESSION_ID;
+  private generateSessionId(): string {
+    // Gera um UUID v4
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 
-  // Método para obter sessionId atual - sempre retorna o fixo
+  // Método para definir sessionId
+  setSessionId(sessionId: string | null) {
+    // Se está usando sessão unificada, NÃO muda o ID
+    if (this.USE_UNIFIED_SESSION) {
+      console.log('⚠️ Modo de sessão unificada ativo. Session ID mantido:', this.UNIFIED_SESSION_ID);
+      return;
+    }
+    
+    // Só aceita mudanças se não está em modo unificado
+    if (sessionId && sessionId !== this.sessionId) {
+      this.sessionId = sessionId;
+      console.log('✅ Session ID atualizado para:', this.sessionId);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('current_session_id', this.sessionId);
+      }
+    }
+  }
+
+  // Método para obter sessionId atual
   getSessionId(): string {
-    return this.FIXED_SESSION_ID;
+    return this.sessionId;
+  }
+
+  // Polling em tempo real para buscar mensagens do JSONL
+  startRealtimePolling(
+    projectName: string,
+    onNewMessage: (message: any) => void
+  ): () => void {
+    let lastAssistantTimestamp: string | null = null;
+    let polling = true;
+    let pollStartTime = Date.now();
+    
+    const poll = async () => {
+      if (!polling) return;
+      
+      try {
+        const response = await fetch(`${this.baseUrl}/api/realtime/latest/${projectName}?limit=10`);
+        if (response.ok) {
+          const data = await response.json();
+          
+          if (data.messages && data.messages.length > 0) {
+            // Pega apenas mensagens do assistant
+            const assistantMessages = data.messages.filter((msg: any) => msg.role === 'assistant');
+            
+            if (assistantMessages.length > 0) {
+              // Pega a última mensagem do assistant
+              const lastAssistant = assistantMessages[assistantMessages.length - 1];
+              
+              // Só processa se:
+              // 1. É uma mensagem nova (timestamp diferente)
+              // 2. A mensagem foi criada DEPOIS que começamos o polling
+              const messageTime = new Date(lastAssistant.timestamp).getTime();
+              
+              if (lastAssistant.timestamp !== lastAssistantTimestamp && messageTime > pollStartTime) {
+                console.log('🆕 Nova resposta do assistant:', lastAssistant.content.substring(0, 50));
+                lastAssistantTimestamp = lastAssistant.timestamp;
+                onNewMessage(lastAssistant);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Erro no polling:', error);
+      }
+      
+      // Continua polling a cada 300ms
+      if (polling) {
+        setTimeout(poll, 300);
+      }
+    };
+    
+    // Inicia o polling
+    poll();
+    
+    // Retorna função para parar o polling
+    return () => {
+      polling = false;
+    };
   }
 
   async sendMessage(
@@ -154,11 +247,10 @@ class ChatAPI {
                 timestamp: new Date().toISOString()
               });
               
-              // NÃO atualiza sessionId - sempre usa o FIXO
-              if (data.session_id && data.session_id !== this.FIXED_SESSION_ID) {
-                console.log('⚠️ Servidor retornou sessionId diferente:', data.session_id);
-                console.log('🎯 Mantendo Session ID Fixo:', this.FIXED_SESSION_ID);
-                // Monitor vai consolidar automaticamente
+              // Atualiza sessionId se necessário
+              if (data.session_id && data.session_id !== this.sessionId) {
+                console.log('🔄 Servidor retornou sessionId diferente:', data.session_id);
+                console.log('📌 Session ID atual:', this.sessionId);
               }
               
               if (data.type === 'error' && onError) {
@@ -232,7 +324,7 @@ class ChatAPI {
       throw new Error('Failed to delete session');
     }
 
-    this.sessionId = this.FIXED_SESSION_ID;
+    this.sessionId = this.UNIFIED_SESSION_ID;
   }
 }
 

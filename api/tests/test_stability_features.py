@@ -9,7 +9,7 @@ import json
 import time
 from typing import Dict, Any
 
-BASE_URL = "http://localhost:8989"
+BASE_URL = "http://localhost:8991"
 
 async def test_endpoint(session: aiohttp.ClientSession, endpoint: str, method: str = "GET", data: Dict = None) -> Dict[str, Any]:
     """Testa um endpoint da API."""
@@ -142,12 +142,12 @@ async def main():
     print("\n" + "=" * 60)
     print("✅ Teste das funcionalidades de estabilidade concluído!")
     print("\nPara monitoramento contínuo, você pode usar:")
-    print("- curl http://localhost:8989/health/detailed")
-    print("- curl http://localhost:8989/metrics")
-    print("- curl http://localhost:8989/health/stability")
+    print("- curl http://localhost:8991/health/detailed")
+    print("- curl http://localhost:8991/metrics")
+    print("- curl http://localhost:8991/health/stability")
 
 if __name__ == "__main__":
-    print("Certifique-se de que a API está rodando em http://localhost:8989")
+    print("Certifique-se de que a API está rodando em http://localhost:8991")
     print("Para iniciar a API: python server.py")
     print()
     

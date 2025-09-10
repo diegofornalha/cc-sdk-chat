@@ -2,7 +2,7 @@ import React from "react";
 import { ChatMessage } from "./ChatMessage";
 import { MessageInput } from "./MessageInput";
 import { SessionTabs } from "../session/SessionTabs";
-import { ProcessingIndicator } from "../../../components/ProcessingIndicator";
+// ProcessingIndicator removido - mostra conteúdo direto
 import { ChatErrorBoundary } from "../error/ChatErrorBoundary";
 import SessionErrorBoundary from "../error/SessionErrorBoundary";
 import { useSessionRecovery } from "@/hooks/useSessionRecovery";
@@ -240,6 +240,22 @@ export function ChatInterface({
       return () => clearTimeout(timeoutId);
     }
   }, [activeSession?.messages, streamingContent, scrollToBottom, autoScrollEnabled, isUserScrolling]);
+  
+  // Força atualização em tempo real do streaming
+  React.useEffect(() => {
+    const handleStreamingUpdate = (event: CustomEvent) => {
+      // Força re-render quando receber novo conteúdo
+      if (isStreaming) {
+        // Trigger re-render forçado
+        scrollToBottom("auto");
+      }
+    };
+    
+    window.addEventListener('streaming-update', handleStreamingUpdate as any);
+    return () => {
+      window.removeEventListener('streaming-update', handleStreamingUpdate as any);
+    };
+  }, [isStreaming, scrollToBottom]);
 
   // Força scroll para o fim quando iniciar nova mensagem
   React.useEffect(() => {
@@ -249,6 +265,59 @@ export function ChatInterface({
       scrollToBottom("auto");
     }
   }, [isStreaming, scrollToBottom]);
+
+  // Polling em tempo real - DIRETO E SIMPLES
+  React.useEffect(() => {
+    if (!isStreaming) return;
+    
+    console.log('🚀 Iniciando streaming em tempo real');
+    const projectName = window.location.pathname.split('/')[1] || '-Users-2a--claude-cc-sdk-chat-api';
+    let gotResponse = false;
+    
+    const stopPolling = api.startRealtimePolling(
+      projectName,
+      (message) => {
+        if (message.role === 'assistant' && message.content && !gotResponse) {
+          gotResponse = true;
+          console.log('📨 Resposta recebida:', message.content.substring(0, 50));
+          
+          // Mostra a resposta imediatamente
+          setStreamingContent(message.content);
+          
+          // Aguarda um pouco e finaliza
+          setTimeout(() => {
+            // Adiciona à sessão
+            if (activeSessionId) {
+              addMessage(activeSessionId, {
+                role: "assistant",
+                content: message.content,
+                timestamp: new Date(),
+              });
+            }
+            
+            // Limpa streaming
+            setStreaming(false);
+            setStreamingContent("");
+            console.log('✅ Chat desbloqueado');
+          }, 500);
+        }
+      }
+    );
+    
+    // Timeout máximo de 8 segundos
+    const timeout = setTimeout(() => {
+      if (!gotResponse) {
+        console.warn('⏱️ Timeout - desbloqueando chat');
+        setStreaming(false);
+        setStreamingContent("");
+      }
+    }, 8000);
+    
+    return () => {
+      stopPolling();
+      clearTimeout(timeout);
+    };
+  }, [isStreaming, activeSessionId, addMessage]);
 
   // Cleanup da fila de digitação e timeouts
   React.useEffect(() => {
@@ -416,10 +485,16 @@ export function ChatInterface({
     // Limpa qualquer digitação em andamento
     clearTypingQueue();
 
-    // Inicia streaming
+    // Inicia streaming IMEDIATAMENTE
     setStreaming(true);
-    setStreamingContent("");
-    setProcessing(true);
+    setStreamingContent("🔄 Processando..."); // Indicador simples
+    
+    // Força atualização visual imediata
+    requestAnimationFrame(() => {
+      // Garante que o componente de streaming esteja visível
+      setIsUserScrolling(false);
+      setAutoScrollEnabled(true);
+    });
 
     console.log("🚀 [DEBUG] Iniciando envio de mensagem:", {
       content: content.substring(0, 50),
@@ -479,8 +554,8 @@ export function ChatInterface({
               break;
 
             case "processing":
-              // Mantém indicador "Processando..." ativo
-              setProcessing(true);
+              // Inicia polling em tempo real quando começar o processamento
+              console.log('🎯 Processamento iniciado - aguardando respostas em tempo real');
               break;
 
             case "text_chunk":
@@ -490,33 +565,42 @@ export function ChatInterface({
                 isFirstChunk: isFirstTextChunk,
               });
 
-              // Para o indicador "Processando..." no primeiro chunk de texto
+              // Se é o primeiro chunk, substitui o indicador
               if (isFirstTextChunk) {
-                setProcessing(false);
                 isFirstTextChunk = false;
+                // Limpa o indicador de ferramenta e começa com o conteúdo real
+                setStreamingContent(data.content || "");
+                currentContent = data.content || "";
+              } else {
+                // Chunks subsequentes são adicionados
+                if (data.content) {
+                  appendStreamingContent(data.content);
+                  currentContent += data.content;
+                }
               }
-
-              // Adiciona à fila de digitação em vez de mostrar direto
-              if (data.content) {
-                console.log(
-                  "⌨️ [DEBUG] Adicionando à fila de digitação:",
-                  data.content.substring(0, 30),
-                );
-                addToTypingQueue(data.content);
-                currentContent += data.content;
-                console.log(
-                  "📝 [DEBUG] Conteúdo acumulado:",
-                  currentContent.length,
-                  "caracteres",
-                );
-              }
+                
+              // Força atualização visual IMEDIATA
+              requestAnimationFrame(() => {
+                // Força re-render do componente
+                const event = new CustomEvent('streaming-update', { 
+                  detail: { content: data.content }
+                });
+                window.dispatchEvent(event);
+              });
+              
+              console.log(
+                "📝 [DEBUG] Conteúdo acumulado:",
+                currentContent.length,
+                "caracteres",
+              );
               break;
 
             case "tool_use":
               if (data.tool) {
                 tools.push(data.tool);
                 const toolMsg = `\n📦 Usando ferramenta: ${data.tool}\n`;
-                addToTypingQueue(toolMsg);
+                // Exibe imediatamente sem animação
+                appendStreamingContent(toolMsg);
                 currentContent += toolMsg;
                 console.log(`Usando ferramenta: ${data.tool}`);
               }
@@ -942,25 +1026,18 @@ export function ChatInterface({
                       />
                     ))}
 
-                    {isProcessing && !streamingContent && (
-                      <div className="flex items-center justify-start mb-6">
-                        <div className="flex gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted">
-                            <Bot className="h-5 w-5" />
-                          </div>
-                          <ProcessingIndicator message="🔄 Processando Resposta..." />
-                        </div>
-                      </div>
-                    )}
+                    {/* Indicador de processamento removido - conteúdo aparece direto */}
 
-                    {isStreaming && streamingContent && (
-                      <ChatMessage
-                        role="assistant"
-                        content={streamingContent}
-                        isStreaming
-                        sessionTitle={activeSession?.title}
-                        sessionId={activeSession?.id}
-                      />
+                    {isStreaming && (
+                      <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+                        <ChatMessage
+                          role="assistant"
+                          content={streamingContent || "📦 Usando ferramenta..."}
+                          isStreaming
+                          sessionTitle={activeSession?.title}
+                          sessionId={activeSession?.id}
+                        />
+                      </div>
                     )}
 
                     <div ref={messagesEndRef} />

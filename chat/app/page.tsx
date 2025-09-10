@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Bot, FolderOpen, MessageSquare, Clock, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { SystemStatus } from '@/components/SystemStatus';
 
 interface WebSession {
   id: string;
@@ -107,7 +108,7 @@ export default function Home() {
           <Bot className="mx-auto h-12 w-12 animate-pulse text-primary" />
           <h2 className="mt-4 text-lg font-medium">Descobrindo projetos...</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Escaneando /home/suthub/.claude/projects
+            Escaneando /.claude/projects
           </p>
         </div>
       </div>
@@ -133,6 +134,11 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        {/* System Status */}
+        <div className="mb-8">
+          <SystemStatus />
+        </div>
+
         {projects.length === 0 ? (
           <Card className="p-12 text-center">
             <Bot className="mx-auto h-16 w-16 text-muted-foreground" />

@@ -76,7 +76,7 @@ export function MessageInput({
       if (isFirstMessage && sessionId) {
         try {
           const projectPath = window.location.pathname.split('/').slice(1).join('/')
-          const baseProjectPath = `/home/suthub/.claude/projects/${projectPath}`
+          const baseProjectPath = `/.claude/projects/${projectPath}`
           
           const response = await fetch('/api/load-project-history', {
             method: 'POST',

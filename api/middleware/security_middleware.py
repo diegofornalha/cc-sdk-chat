@@ -449,7 +449,7 @@ class CORSSecurityMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.allowed_origins = {
             "http://localhost:3082",
-            "http://localhost:3000",
+            "http://localhost:3082",
             "http://127.0.0.1:3082",
             "https://suthub.agentesintegrados.com",
             "http://suthub.agentesintegrados.com"

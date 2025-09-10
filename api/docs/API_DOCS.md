@@ -229,14 +229,14 @@ config = {
 }
 
 response = requests.post(
-    "http://localhost:8989/api/session-with-config",
+    "http://localhost:8991/api/session-with-config",
     json=config
 )
 session_id = response.json()["session_id"]
 
 # Enviar mensagem com streaming
 with requests.post(
-    "http://localhost:8989/api/chat",
+    "http://localhost:8991/api/chat",
     json={
         "message": "Crie um script hello.py",
         "session_id": session_id
@@ -255,7 +255,7 @@ with requests.post(
 
 ```javascript
 // Criar sessão
-const configResponse = await fetch('http://localhost:8989/api/session-with-config', {
+const configResponse = await fetch('http://localhost:8991/api/session-with-config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -268,7 +268,7 @@ const { session_id } = await configResponse.json();
 
 // Chat com streaming
 const eventSource = new EventSource(
-    `http://localhost:8989/api/chat`,
+    `http://localhost:8991/api/chat`,
     {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -304,7 +304,7 @@ eventSource.onmessage = (event) => {
 
 ```bash
 # Criar sessão com configuração
-curl -X POST http://localhost:8989/api/session-with-config \
+curl -X POST http://localhost:8991/api/session-with-config \
   -H "Content-Type: application/json" \
   -d '{
     "system_prompt": "Você é um assistente Bash",
@@ -313,7 +313,7 @@ curl -X POST http://localhost:8989/api/session-with-config \
   }'
 
 # Enviar mensagem (use o session_id retornado)
-curl -X POST http://localhost:8989/api/chat \
+curl -X POST http://localhost:8991/api/chat \
   -H "Content-Type: application/json" \
   -d '{
     "message": "Liste os arquivos no diretório atual",
@@ -321,10 +321,10 @@ curl -X POST http://localhost:8989/api/chat \
   }'
 
 # Obter informações da sessão
-curl http://localhost:8989/api/session/UUID-AQUI
+curl http://localhost:8991/api/session/UUID-AQUI
 
 # Listar todas as sessões
-curl http://localhost:8989/api/sessions
+curl http://localhost:8991/api/sessions
 ```
 
 ## 🚀 Instalação e Execução
@@ -366,10 +366,10 @@ cd ..
 python3 server.py
 
 # Modo desenvolvimento (com auto-reload)
-uvicorn server:app --reload --host 0.0.0.0 --port 8989
+uvicorn server:app --reload --host 0.0.0.0 --port 8991
 
 # Com logs detalhados
-uvicorn server:app --log-level debug --port 8989
+uvicorn server:app --log-level debug --port 8991
 ```
 
 ## 📊 Monitoramento e Métricas
@@ -388,7 +388,7 @@ Cada sessão rastreia:
 # Script para análise de uso
 import requests
 
-response = requests.get("http://localhost:8989/api/sessions")
+response = requests.get("http://localhost:8991/api/sessions")
 sessions = response.json()
 
 total_cost = sum(s["history"]["total_cost"] for s in sessions)
@@ -407,7 +407,7 @@ print(f"Custo total: ${total_cost:.4f}")
 
 A API está configurada para aceitar requisições de:
 - `http://localhost:3082`
-- `http://localhost:3000`
+- `http://localhost:3082`
 
 Para produção, ajuste em `server.py`:
 
@@ -462,7 +462,7 @@ python3 -m src "teste"
 # Force limpeza da sessão
 import requests
 requests.post(
-    "http://localhost:8989/api/clear",
+    "http://localhost:8991/api/clear",
     json={"session_id": "UUID"}
 )
 ```

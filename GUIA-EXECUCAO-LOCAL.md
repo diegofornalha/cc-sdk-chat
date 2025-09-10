@@ -42,7 +42,7 @@ cc-sdk-chat/
 
 #### Criar ambiente virtual Python:
 ```bash
-cd /home/suthub/.claude/api-claude-code-app/cc-sdk-chat
+cd /.claude/api-claude-code-app/cc-sdk-chat
 python3 -m venv .venv
 ```
 
@@ -111,7 +111,7 @@ O backend está configurado para aceitar conexões do frontend:
 ```python
 allow_origins=[
     "http://localhost:3082", 
-    "http://localhost:3000",
+    "http://localhost:3082",
     "http://127.0.0.1:3082",
 ]
 ```
@@ -158,12 +158,12 @@ cd chat && npm install
 ### Inicialização Completa:
 ```bash
 # Terminal 1 - Backend
-cd /home/suthub/.claude/api-claude-code-app/cc-sdk-chat
+cd /.claude/api-claude-code-app/cc-sdk-chat
 source .venv/bin/activate
 PORT=8992 python api/server.py
 
 # Terminal 2 - Frontend  
-cd /home/suthub/.claude/api-claude-code-app/cc-sdk-chat/chat
+cd /.claude/api-claude-code-app/cc-sdk-chat/chat
 npm run dev
 ```
 
@@ -180,7 +180,7 @@ npm run dev
 
 ### API - server.py (linha 899):
 ```python
-port = int(os.getenv("PORT", "8989"))  # Padrão 8989, override com PORT=8992
+port = int(os.getenv("PORT", "8991"))  # Padrão 8991, override com PORT=8992
 ```
 
 ### Frontend - package.json:
@@ -229,4 +229,4 @@ Utilitários compartilhados entre os módulos
 
 **Última atualização**: 31/08/2025  
 **Status**: ✅ Funcional e testado  
-**Localização**: `/home/suthub/.claude/api-claude-code-app/cc-sdk-chat/`
+**Localização**: `/.claude/api-claude-code-app/cc-sdk-chat/`

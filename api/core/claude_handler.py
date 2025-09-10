@@ -25,7 +25,7 @@ from core.session_manager import ClaudeCodeSessionManager
 sdk_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'claude-code-sdk-python')
 sys.path.insert(0, sdk_dir)
 
-from src import (
+from claude_code_sdk import (
     AssistantMessage,
     TextBlock,
     ResultMessage,
@@ -250,7 +250,11 @@ class ClaudeHandler:
         session_id: str, 
         message: str
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Envia mensagem e retorna stream de respostas otimizado - sem buffers e com latência mínima."""
+        """Envia mensagem e retorna stream de respostas - FORÇA SESSION ID FIXO."""
+        
+        # FORÇA usar sempre o session ID unificado
+        UNIFIED_SESSION_ID = "00000000-0000-0000-0000-000000000001"
+        session_id = UNIFIED_SESSION_ID  # SEMPRE usa o ID fixo
         
         # Cria sessão se não existir
         if session_id not in self.clients:
@@ -259,8 +263,8 @@ class ClaudeHandler:
         # Atualiza atividade da sessão
         self.session_manager.update_session_activity(session_id)
             
-        # Mantém session_id original durante streaming, validação apenas no final
-        real_session_id = session_id
+        # Usa sempre o session_id unificado
+        real_session_id = UNIFIED_SESSION_ID
         client = self.clients[session_id]
         
         try:
@@ -270,18 +274,34 @@ class ClaudeHandler:
                 "session_id": real_session_id
             }
             
-            # Envia query
+            # Envia query - FORÇA usar o session_id correto
+            # HACK: O SDK ignora o session_id, então vamos interceptar
             await client.query(message, session_id=session_id)
             
-            # Stream de respostas otimizado - sem buffers nem delays
+            # SIMPLIFICADO - Recebe resposta e envia em chunks
             async for msg in client.receive_response():
                 if isinstance(msg, AssistantMessage):
                     for block in msg.content:
                         if isinstance(block, TextBlock):
-                            # Envia cada TextBlock imediatamente como text_chunk
+                            # Pega o texto completo
+                            text = block.text
+                            
+                            # Divide em pequenos pedaços e envia
+                            words = text.split()
+                            for i in range(0, len(words), 2):
+                                chunk = ' '.join(words[i:i+2])
+                                if chunk:
+                                    yield {
+                                        "type": "text_chunk",
+                                        "content": chunk + " ",
+                                        "session_id": real_session_id
+                                    }
+                        
+                        elif isinstance(block, ToolUseBlock):
                             yield {
-                                "type": "text_chunk",
-                                "content": block.text,
+                                "type": "tool_use",
+                                "tool": block.name,
+                                "id": block.id,
                                 "session_id": real_session_id
                             }
                                 
@@ -304,11 +324,12 @@ class ClaudeHandler:
                             }
                             
                 elif isinstance(msg, ResultMessage):
-                    # Validação de session_id apenas no final, se necessário
-                    sdk_session_id = None
+                    # FORÇA usar o session_id que queremos
+                    # Ignora completamente o que o SDK retorna
+                    sdk_session_id = session_id  # Força usar o original SEMPRE
                     
-                    # Tentativa rápida: Métodos diretos do SDK
-                    sdk_session_id = getattr(msg, 'session_id', None)
+                    # Não tenta pegar session_id do SDK para manter consistência
+                    # sdk_session_id = getattr(msg, 'session_id', None)  # DESABILITADO
                     
                     # Fallback simples: busca em atributos da mensagem
                     if not sdk_session_id and hasattr(msg, '__dict__'):
@@ -322,9 +343,9 @@ class ClaudeHandler:
                                 except ValueError:
                                     continue
                     
-                    # Atualiza session_id apenas se encontrou um válido e diferente
-                    if sdk_session_id and sdk_session_id != session_id:
-                        real_session_id = sdk_session_id
+                    # NÃO atualiza session_id - mantém o original para consistência
+                    # if sdk_session_id and sdk_session_id != session_id:
+                    #     real_session_id = sdk_session_id  # DESABILITADO
                     
                     result_data = {
                         "type": "result",

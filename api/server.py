@@ -33,6 +33,7 @@ try:
     from routes.logging_routes import router as logging_router
     from routes.projects_routes import router as projects_router
     from routes.metrics_routes import router as metrics_router
+    from routes.realtime_routes import router as realtime_router
     ENHANCED_ROUTES_AVAILABLE = True
 except ImportError:
     ENHANCED_ROUTES_AVAILABLE = False
@@ -40,11 +41,12 @@ except ImportError:
     logging_router = None
     projects_router = None
     metrics_router = None
+    realtime_router = None
 
 # Configuração de logging estruturado
 setup_logging(
     level=os.getenv("LOG_LEVEL", "INFO"),
-    log_file="/home/suthub/.claude/api-claude-code-app/cc-sdk-chat/logs/api.log",
+    log_file="logs/api.log",
     max_bytes=50 * 1024 * 1024,  # 50MB
     backup_count=10
 )
@@ -305,7 +307,7 @@ app = FastAPI(
     },
     servers=[
         {
-            "url": "http://localhost:8989",
+            "url": "http://localhost:8991",
             "description": "Servidor de desenvolvimento"
         }
     ],
@@ -345,7 +347,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3082", 
-        "http://localhost:3000",
+        "http://localhost:3082",
         "http://127.0.0.1:3082",
         "https://suthub.agentesintegrados.com",
         "http://suthub.agentesintegrados.com"
@@ -381,6 +383,11 @@ if ENHANCED_ROUTES_AVAILABLE:
         app.include_router(metrics_router)
         logger.info("✅ Rotas de métricas registradas",
                    extra={"event": "routes_registered", "component": "metrics_routes"})
+    
+    if realtime_router:
+        app.include_router(realtime_router)
+        logger.info("✅ Rotas de realtime registradas",
+                   extra={"event": "routes_registered", "component": "realtime_routes"})
 session_manager = ClaudeCodeSessionManager()
 session_validator = SessionValidator()
 rate_limiter = RateLimitManager(redis_url=os.getenv("REDIS_URL"))
@@ -842,62 +849,24 @@ async def send_message(chat_message: SecureChatMessage) -> StreamingResponse:
     )
     
     async def generate():
-        """Gera stream SSE com tratamento robusto de erros."""
-        # Inicializa real_session_id no escopo da função
+        """Gera stream SSE - simples e direto."""
         real_session_id = session_id
         start_time = time.time()
         total_chunks = 0
         
         try:
-            # Usa sistema de fallbacks para execução protegida
-            async def execute_chat():
-                async for response in claude_handler.send_message(
-                    session_id, 
-                    chat_message.message
-                ):
-                    yield response
-            
-            # Executa com circuit breaker e fallbacks
-            chat_result = await fallback_system.execute_with_fallback(
-                "chat",
-                execute_chat,
-                {"session_id": session_id, "message": chat_message.message[:100]}
-            )
-            
-            # Se usou fallback, envia resposta mock
-            if chat_result.get("fallback_used"):
-                mock_response = chat_result["result"]
-                data = json.dumps(mock_response)
+            # Processa mensagem e envia chunks
+            async for response in claude_handler.send_message(
+                session_id, 
+                chat_message.message
+            ):
+                # Envia cada resposta
+                data = json.dumps(response)
                 yield f"data: {data}\n\n"
                 total_chunks += 1
-            else:
-                # Execução normal - itera sobre os responses
-                async for response in chat_result["result"]:
-                    # Captura session_id real quando disponível
-                    if "session_id" in response:
-                        real_session_id = response["session_id"]
-                        
-                    # Se é primeira mensagem sem session_id, envia evento de nova sessão
-                    if not session_id and real_session_id and real_session_id != session_id:
-                        migration_data = json.dumps({
-                            "type": "session_migrated",
-                            "session_id": real_session_id,
-                            "migrated": False  # Nova sessão, não migração
-                        })
-                        yield f"data: {migration_data}\n\n"
-                        
-                        logger.info(
-                            "Nova sessão criada durante streaming",
-                            extra={
-                                "event": "session_auto_created",
-                                "new_session_id": real_session_id
-                            }
-                        )
-                    
-                    # Formato SSE
-                    data = json.dumps(response)
-                    yield f"data: {data}\n\n"
-                    total_chunks += 1
+                
+                if response.get("type") == "text_chunk":
+                    logger.info(f"Chunk enviado: {response.get('content', '')[:30]}")
                     
         except Exception as e:
             error_msg = str(e)
@@ -2112,7 +2081,7 @@ if __name__ == "__main__":
     
     # Usa variáveis de ambiente para configuração flexível
     host = os.getenv("HOST", "127.0.0.1")
-    port = int(os.getenv("PORT", "8989"))
+    port = int(os.getenv("PORT", "8991"))
     log_level = os.getenv("LOG_LEVEL", "info").lower()
     
     uvicorn.run(

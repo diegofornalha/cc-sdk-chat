@@ -682,7 +682,7 @@ const useChatStoreProtected = create<ChatStore>()(
           const errorStore = useErrorStore.getState()
           errorStore.createSnapshot(get(), 'before-cross-session-load')
           
-          const projectPath = '/home/suthub/.claude/projects/-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
+          const projectPath = '/.claude/projects/-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
           
           const response = await fetch('/api/load-project-history', {
             method: 'POST',

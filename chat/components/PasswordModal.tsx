@@ -18,7 +18,7 @@ export function PasswordModal({ onSuccess }: PasswordModalProps) {
             onSuccess();
         } else {
             setError('Senha incorreta');
-            setTimeout(() => setError(''), 3000);
+            setTimeout(() => setError(''), 3082);
         }
     };
 

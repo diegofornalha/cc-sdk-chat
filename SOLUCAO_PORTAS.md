@@ -72,7 +72,7 @@ except:
 ## 🔌 Problema 2: Configuração de Portas
 
 ### Diagnóstico
-- **Problema**: Portas hardcoded (`8992`, `8989`, `8990`) espalhadas pelo código
+- **Problema**: Portas hardcoded (`8992`, `8991`, `8990`) espalhadas pelo código
 - **Impacto**: Conflitos quando portas estavam em uso, difícil manutenção
 - **Sintoma**: `Failed to fetch` e `ERR_CONNECTION_REFUSED` no frontend
 
@@ -282,7 +282,7 @@ nano .env.local
 
 # 2. Mude as portas
 NEXT_PUBLIC_API_PORT=9000
-NEXT_PUBLIC_FRONTEND_PORT=3000
+NEXT_PUBLIC_FRONTEND_PORT=3082
 
 # 3. Reinicie
 ./stop.sh && ./start.sh

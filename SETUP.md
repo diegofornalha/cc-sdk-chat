@@ -74,7 +74,7 @@ nano .env.local
 
 # Mude as portas desejadas
 NEXT_PUBLIC_API_PORT=9000
-NEXT_PUBLIC_FRONTEND_PORT=3000
+NEXT_PUBLIC_FRONTEND_PORT=3082
 
 # Reinicie o sistema
 ./stop.sh && ./start.sh

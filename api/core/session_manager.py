@@ -33,10 +33,10 @@ class ClaudeCodeSessionManager:
     """Gerenciador otimizado de sessões Claude Code SDK."""
     
     # Configurações padrão
-    MAX_SESSIONS = 50  # Máximo de sessões simultâneas
-    SESSION_TIMEOUT_MINUTES = 30  # Timeout para sessões inativas
-    CLEANUP_INTERVAL_MINUTES = 5  # Intervalo de limpeza automática
-    MAX_CONNECTION_POOL_SIZE = 10  # Tamanho máximo do pool de conexões
+    MAX_SESSIONS = 500  # Aumentado - máximo de sessões simultâneas
+    SESSION_TIMEOUT_MINUTES = 0  # 0 = Sem timeout - sessões nunca expiram
+    CLEANUP_INTERVAL_MINUTES = 0  # 0 = Sem limpeza automática
+    MAX_CONNECTION_POOL_SIZE = 50  # Aumentado - pool de conexões
     
     def __init__(self):
         self.claude_projects = Path.home() / ".claude" / "projects"
@@ -55,6 +55,11 @@ class ClaudeCodeSessionManager:
         # Task scheduler será iniciado quando necessário
         self._scheduler_started = False
         
+        # Log configuração de persistência
+        self.logger.info("🔒 Sessões configuradas como PERMANENTES - Nunca expiram")
+        self.logger.info(f"⚙️ Timeout: {self.SESSION_TIMEOUT_MINUTES} min (0 = desabilitado)")
+        self.logger.info(f"🔧 Limpeza automática: {self.CLEANUP_INTERVAL_MINUTES} min (0 = desabilitada)")
+        
     async def create_new_claude_session(self) -> Optional[str]:
         """
         Cria nova sessão no Claude Code SDK e retorna ID real.
@@ -68,7 +73,7 @@ class ClaudeCodeSessionManager:
                 'claude', 'olá',
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd='/home/suthub/.claude/api-claude-code-app/cc-sdk-chat'
+                cwd='/.claude/api-claude-code-app/cc-sdk-chat'
             )
             
             stdout, stderr = await process.communicate()
@@ -136,7 +141,7 @@ class ClaudeCodeSessionManager:
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd='/home/suthub/.claude/api-claude-code-app/claude-code-sdk-python'
+                cwd='/.claude/api-claude-code-app/claude-code-sdk-python'
             )
             
             stdout, stderr = await process.communicate()
@@ -187,25 +192,17 @@ class ClaudeCodeSessionManager:
         self.logger.info("Task scheduler iniciado")
     
     async def _cleanup_scheduler(self):
-        """Task scheduler para limpeza periódica de sessões inativas e órfãs."""
-        while self.scheduler_running:
-            try:
-                # Aguarda o intervalo de limpeza
-                await asyncio.sleep(self.CLEANUP_INTERVAL_MINUTES * 60)
-                
-                # Executa limpeza automática
-                await self.cleanup_inactive_sessions()
-                await self.detect_orphaned_sessions()
-                await self._optimize_connection_pool()
-                
-                # Log de status
-                self.logger.info(f"Cleanup executado - Sessões ativas: {len(self.active_sessions)}, "
-                               f"Pool: {len(self.connection_pool)}, "
-                               f"Órfãs detectadas: {len(self.orphaned_sessions)}")
-                
-            except Exception as e:
-                self.logger.error(f"Erro no scheduler de limpeza: {e}")
-                await asyncio.sleep(60)  # Aguarda 1 minuto antes de tentar novamente
+        """Task scheduler DESABILITADO - Sessões nunca expiram."""
+        # DESABILITADO - Sessões são permanentes
+        if self.CLEANUP_INTERVAL_MINUTES == 0:
+            self.logger.info("🔒 Limpeza automática DESABILITADA - Sessões são permanentes")
+            self.logger.info("✅ Todas as sessões serão mantidas indefinidamente")
+            return
+            
+        # Código original mantido mas não executado quando CLEANUP_INTERVAL_MINUTES = 0
+        while self.scheduler_running and self.CLEANUP_INTERVAL_MINUTES > 0:
+            await asyncio.sleep(self.CLEANUP_INTERVAL_MINUTES * 60)
+            await self.cleanup_inactive_sessions()
     
     async def stop_scheduler(self):
         """Para o task scheduler."""
@@ -258,11 +255,17 @@ class ClaudeCodeSessionManager:
     
     async def cleanup_inactive_sessions(self) -> List[str]:
         """
-        Remove sessões inativas baseado no timeout configurado.
+        DESABILITADO - Sessões nunca expiram.
         
         Returns:
-            List[str]: Lista de session_ids removidos
+            List[str]: Sempre retorna lista vazia (sem remoções)
         """
+        # DESABILITADO - Sessões são permanentes
+        if self.SESSION_TIMEOUT_MINUTES == 0:
+            self.logger.debug("🔒 Timeout desabilitado - Sessões nunca expiram")
+            return []
+        
+        # Código original mantido mas não executado quando timeout = 0
         timeout_threshold = datetime.now() - timedelta(minutes=self.SESSION_TIMEOUT_MINUTES)
         inactive_sessions = []
         

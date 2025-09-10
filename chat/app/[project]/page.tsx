@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { config } from '@/lib/config';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -69,35 +70,87 @@ export default function ProjectDashboardPage() {
   const loadProjectData = async () => {
     try {
       setIsLoading(true);
+      console.log('🔍 Carregando projeto:', projectName);
       
-      // Carrega histórico de todas as sessões do projeto
-      const response = await fetch('/api/load-project-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          projectPath: `/home/suthub/.claude/projects/${projectName}`,
-          primarySessionId: 'dashboard' // ID dummy para o dashboard
-        })
-      });
+      // Carrega sessões do projeto
+      const apiBaseUrl = config.getApiUrl();
+      const url = `${apiBaseUrl}/api/analytics/projects/${projectName}/sessions`;
+      console.log('📡 Buscando sessões em:', url);
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error('Erro ao carregar dados do projeto');
       }
 
-      const { sessions: sessionsData } = await response.json();
-      setProjectSessions(sessionsData);
+      const data = await response.json();
+      console.log('📦 Dados recebidos:', data);
+      const sessionsData = data.sessions || [];
+      console.log('📊 Sessões encontradas:', sessionsData.length);
+      
+      // Busca histórico completo de cada sessão
+      const sessionsWithMessages = await Promise.all(
+        sessionsData.map(async (session: any) => {
+          // O endpoint retorna 'id' não 'session_id'
+          const sessionId = session.id || session.session_id;
+          console.log(`📝 Buscando histórico da sessão: ${sessionId}`);
+          
+          try {
+            const historyResponse = await fetch(`/api/session-history/${sessionId}`);
+            if (historyResponse.ok) {
+              const historyData = await historyResponse.json();
+              console.log(`✅ Histórico carregado: ${historyData.messages?.length || 0} mensagens`);
+              return {
+                id: sessionId,
+                title: session.title || `Sessão ${sessionId.slice(0, 8)}`,
+                origin: session.origin || 'terminal',
+                total_messages: session.total_messages || session.messages_count || 0,
+                first_message_time: session.first_message_time || session.created_at,
+                last_message_time: session.last_message_time || session.last_activity,
+                total_tokens: session.total_tokens || session.tokens_used || 0,
+                total_cost: session.total_cost || 0,
+                messages: historyData.messages || []
+              };
+            } else {
+              console.error(`❌ Erro ao buscar histórico: ${historyResponse.status}`);
+            }
+          } catch (error) {
+            console.error('❌ Erro ao buscar histórico da sessão:', sessionId, error);
+          }
+          
+          // Retorna sessão com os dados que já temos
+          return {
+            id: sessionId,
+            title: session.title || `Sessão ${sessionId.slice(0, 8)}`,
+            origin: session.origin || 'terminal',
+            total_messages: session.total_messages || session.messages_count || 0,
+            first_message_time: session.first_message_time || session.created_at,
+            last_message_time: session.last_message_time || session.last_activity,
+            total_tokens: session.total_tokens || session.tokens_used || 0,
+            total_cost: session.total_cost || 0,
+            messages: session.messages || []
+          };
+        })
+      );
+      
+      console.log('✅ Sessões com mensagens carregadas:', sessionsWithMessages.length);
+      sessionsWithMessages.forEach(s => {
+        console.log(`  - ${s.id}: ${s.messages.length} mensagens`);
+      });
+      setProjectSessions(sessionsWithMessages);
 
       // Cria mensagens unificadas ordenadas por tempo
       const allMessages: any[] = [];
-      sessionsData.forEach((session: ProjectSession) => {
-        session.messages.forEach((msg: any) => {
-          allMessages.push({
-            ...msg,
-            sessionOrigin: session.id,
-            sessionTitle: getSessionDisplayName(session.origin, session.id),
-            timestamp: new Date(msg.timestamp)
+      sessionsWithMessages.forEach((session: ProjectSession) => {
+        if (session.messages && session.messages.length > 0) {
+          session.messages.forEach((msg: any) => {
+            allMessages.push({
+              ...msg,
+              sessionOrigin: session.id,
+              sessionTitle: getSessionDisplayName(session.origin, session.id),
+              timestamp: new Date(msg.timestamp || msg.created_at)
+            });
           });
-        });
+        }
       });
 
       // Ordena por timestamp
@@ -105,7 +158,7 @@ export default function ProjectDashboardPage() {
       setUnifiedMessages(allMessages);
 
       // Ordena sessões por data de primeira mensagem (ordem cronológica)
-      const sortedSessions = sessionsData.sort((a: ProjectSession, b: ProjectSession) => {
+      const sortedSessions = sessionsWithMessages.sort((a: ProjectSession, b: ProjectSession) => {
         return new Date(a.first_message_time).getTime() - new Date(b.first_message_time).getTime();
       });
 
@@ -147,10 +200,10 @@ export default function ProjectDashboardPage() {
         }
       }
 
-      console.log(`📊 Dashboard carregado: ${sessionsData.length} sessões`);
+      console.log(`📊 Dashboard carregado: ${sessionsWithMessages.length} sessões`);
     } catch (error) {
-      console.error('Erro ao carregar projeto:', error);
-      console.error('Erro ao carregar dados do projeto');
+      console.error('❌ Erro ao carregar projeto:', error);
+      console.error('Stack:', error instanceof Error ? error.stack : 'N/A');
     } finally {
       setIsLoading(false);
     }

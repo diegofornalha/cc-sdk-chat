@@ -237,10 +237,10 @@ class RateLimitManager:
     def __init__(self, redis_url: Optional[str] = None):
         # Regras por endpoint
         self.rules = {
-            "chat": RateLimitRule(requests_per_minute=30, burst_limit=5, block_duration_seconds=300),
-            "session": RateLimitRule(requests_per_minute=60, burst_limit=10, block_duration_seconds=180),
-            "api": RateLimitRule(requests_per_minute=100, burst_limit=20, block_duration_seconds=120),
-            "analytics": RateLimitRule(requests_per_minute=20, burst_limit=5, block_duration_seconds=600)
+            "chat": RateLimitRule(requests_per_minute=300, burst_limit=50, block_duration_seconds=60),
+            "session": RateLimitRule(requests_per_minute=600, burst_limit=100, block_duration_seconds=60),
+            "api": RateLimitRule(requests_per_minute=1000, burst_limit=200, block_duration_seconds=60),
+            "analytics": RateLimitRule(requests_per_minute=500, burst_limit=100, block_duration_seconds=60)
         }
         
         self.redis_url = redis_url

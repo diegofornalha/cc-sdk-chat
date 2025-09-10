@@ -4,8 +4,8 @@
 Este documento descreve o processo completo de integração entre o frontend Next.js (chat), backend FastAPI com Claude Code SDK, e a nova integração com Streamlit.
 
 ## Problema Inicial
-- A API estava configurada para rodar na porta 8989, mas essa porta estava ocupada por outro processo
-- O frontend estava configurado para conectar na porta 8989
+- A API estava configurada para rodar na porta 8991, mas essa porta estava ocupada por outro processo
+- O frontend estava configurado para conectar na porta 8991
 - Havia incompatibilidade entre as configurações de CORS
 - O Claude Code SDK Python não estava instalado corretamente no ambiente virtual
 
@@ -20,7 +20,7 @@ ls -la ~/.claude/cc-sdk-chat/.venv/bin/
 
 #### Instalação do Claude Code SDK como submodule:
 ```bash
-cd /home/suthub/.claude/cc-sdk-chat/api
+cd /.claude/cc-sdk-chat/api
 git submodule update --init --recursive
 ```
 
@@ -36,10 +36,10 @@ pip3 install --break-system-packages -e claude-code-sdk-python
 
 ### 2. Configuração da API Backend
 
-#### Mudança de porta (8989 → 8992)
-Como a porta 8989 estava ocupada, alteramos para 8992:
+#### Mudança de porta (8991 → 8992)
+Como a porta 8991 estava ocupada, alteramos para 8992:
 
-**Arquivo:** `/home/suthub/.claude/cc-sdk-chat/api/server.py` (linha 532-534)
+**Arquivo:** `/.claude/cc-sdk-chat/api/server.py` (linha 532-534)
 ```python
 if __name__ == "__main__":
     import uvicorn
@@ -49,13 +49,13 @@ if __name__ == "__main__":
 #### Configuração de CORS
 Adicionamos suporte para localhost e 127.0.0.1:
 
-**Arquivo:** `/home/suthub/.claude/cc-sdk-chat/api/server.py` (linhas 76-88)
+**Arquivo:** `/.claude/cc-sdk-chat/api/server.py` (linhas 76-88)
 ```python
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3082", 
-        "http://localhost:3000",
+        "http://localhost:3082",
         "http://127.0.0.1:3082",  # Adicionado
         "https://suthub.agentesintegrados.com",
         "http://suthub.agentesintegrados.com"
@@ -71,7 +71,7 @@ app.add_middleware(
 #### Atualização da URL da API
 Mudamos a URL base para conectar na nova porta:
 
-**Arquivo:** `/home/suthub/.claude/cc-sdk-chat/chat/src/lib/api.ts` (linhas 45-46 e 50)
+**Arquivo:** `/.claude/cc-sdk-chat/chat/src/lib/api.ts` (linhas 45-46 e 50)
 ```typescript
 // Em desenvolvimento, usa localhost
 this.baseUrl = 'http://localhost:8992';
@@ -84,13 +84,13 @@ this.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8992';
 
 #### Iniciar o Backend (API):
 ```bash
-cd /home/suthub/.claude/cc-sdk-chat/api
+cd /.claude/cc-sdk-chat/api
 ~/.claude/cc-sdk-chat/.venv/bin/python server.py
 ```
 
 #### Iniciar o Frontend (Chat):
 ```bash
-cd /home/suthub/.claude/cc-sdk-chat/chat
+cd /.claude/cc-sdk-chat/chat
 npm run dev
 ```
 
@@ -119,7 +119,7 @@ Resposta esperada:
 
 ## Problemas Resolvidos
 
-1. ✅ **Porta ocupada:** Mudança de 8989 para 8992
+1. ✅ **Porta ocupada:** Mudança de 8991 para 8992
 2. ✅ **CORS:** Adição de origens permitidas
 3. ✅ **Dependências:** Instalação correta do Claude Code SDK
 4. ✅ **Ambiente virtual:** Uso do venv correto
@@ -143,7 +143,7 @@ Os serviços foram iniciados com `run_in_background=true` para manter execução
 ~/.claude/cc-sdk-chat/.venv/bin/python server.py  # bash_8
 
 # Frontend em background  
-cd /home/suthub/.claude/cc-sdk-chat/chat && npm run dev  # bash_10
+cd /.claude/cc-sdk-chat/chat && npm run dev  # bash_10
 ```
 
 ## Comandos Úteis
@@ -185,7 +185,7 @@ O Streamlit estava usando subprocess direto com o Claude SDK, gerando erros de m
 Criamos um cliente API que conecta o Streamlit à mesma API FastAPI usada pelo frontend Next.js.
 
 #### Cliente API para Streamlit:
-**Arquivo criado:** `/home/suthub/.claude/api-claude-code-app/8504-chat/claude_api_client.py`
+**Arquivo criado:** `/.claude/api-claude-code-app/8504-chat/claude_api_client.py`
 
 ```python
 class ClaudeChatAPIClient:
@@ -202,7 +202,7 @@ class ClaudeChatAPIClient:
 ```
 
 #### Modificação do Streamlit:
-**Arquivo modificado:** `/home/suthub/.claude/api-claude-code-app/8504-chat/chat_app.py`
+**Arquivo modificado:** `/.claude/api-claude-code-app/8504-chat/chat_app.py`
 
 ```python
 def send_claude_query(prompt: str) -> Dict:
@@ -240,7 +240,7 @@ pip install --break-system-packages sseclient-py requests
 
 ## Problemas Resolvidos (ATUALIZADO)
 
-1. ✅ **Porta ocupada:** Mudança de 8989 para 8992
+1. ✅ **Porta ocupada:** Mudança de 8991 para 8992
 2. ✅ **CORS:** Adição de origens permitidas
 3. ✅ **Dependências:** Instalação correta do Claude Code SDK
 4. ✅ **Ambiente virtual:** Uso do venv correto
@@ -252,19 +252,19 @@ pip install --break-system-packages sseclient-py requests
 
 #### Iniciar o Backend (API):
 ```bash
-cd /home/suthub/.claude/api-claude-code-app/cc-sdk-chat/api
+cd /.claude/api-claude-code-app/cc-sdk-chat/api
 python3 server.py
 ```
 
 #### Iniciar o Frontend Next.js:
 ```bash
-cd /home/suthub/.claude/api-claude-code-app/cc-sdk-chat/chat
+cd /.claude/api-claude-code-app/cc-sdk-chat/chat
 npm run dev
 ```
 
 #### Iniciar o Streamlit Chat (NOVO):
 ```bash
-cd /home/suthub/.claude/api-claude-code-app/8504-chat
+cd /.claude/api-claude-code-app/8504-chat
 python3 -m streamlit run chat_app.py --server.port 40047 --server.headless true --server.address 0.0.0.0
 ```
 

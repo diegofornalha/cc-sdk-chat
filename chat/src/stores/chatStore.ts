@@ -413,7 +413,7 @@ const useChatStore = create<ChatStore>()(
     },
 
     loadCrossSessionHistory: async (primarySessionId: string) => {
-      const projectPath = '/home/suthub/.claude/projects/-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
+      const projectPath = '/.claude/projects/-home-suthub--claude-api-claude-code-app-cc-sdk-chat'
       
       try {
         // Lista todos os arquivos JSONL do projeto

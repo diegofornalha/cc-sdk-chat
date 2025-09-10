@@ -17,7 +17,7 @@ from collections import deque
 router = APIRouter(prefix="/api/logs", tags=["logging"])
 
 # Configurar logging
-log_dir = Path("/home/suthub/.claude/api-claude-code-app/cc-sdk-chat/api/logs")
+log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
 
 # Configurar logger

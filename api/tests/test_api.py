@@ -13,7 +13,7 @@ except ImportError:
 @pytest.mark.asyncio
 async def test_api():
     """Testa a API."""
-    base_url = "http://localhost:8989"
+    base_url = "http://localhost:8991"
     
     async with aiohttp.ClientSession() as session:
         # Criar nova sessão
