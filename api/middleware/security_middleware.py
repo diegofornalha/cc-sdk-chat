@@ -13,8 +13,12 @@ import logging
 import json
 from urllib.parse import urlparse
 
-from rate_limiter import RateLimitManager
-from security_models import SecurityHeaders, RateLimitInfo
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from middleware.rate_limiter import RateLimitManager
+from utils.security_models import SecurityHeaders, RateLimitInfo
 
 logger = logging.getLogger(__name__)
 

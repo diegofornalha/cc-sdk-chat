@@ -15,24 +15,24 @@ import time
 import os
 from datetime import datetime
 
-from claude_handler import ClaudeHandler, SessionConfig
-from analytics_service import AnalyticsService
-from session_manager import ClaudeCodeSessionManager
-from session_validator import SessionValidator
-from logging_config import setup_logging, get_contextual_logger
-from exception_middleware import ErrorHandlingMiddleware, StreamingErrorHandler
-from security_models import SecureChatMessage, SecureSessionAction, SecureSessionConfigRequest, SecurityHeaders
-from security_middleware import SecurityMiddleware, CORSSecurityMiddleware
-from rate_limiter import RateLimitManager
-from stability_monitor import stability_monitor, CircuitBreakerConfig, CircuitState
-from fallback_system import fallback_system, FallbackConfig, FallbackStrategy
+from core.claude_handler import ClaudeHandler, SessionConfig
+from services.analytics_service import AnalyticsService
+from core.session_manager import ClaudeCodeSessionManager
+from services.session_validator import SessionValidator
+from utils.logging_config import setup_logging, get_contextual_logger
+from middleware.exception_middleware import ErrorHandlingMiddleware, StreamingErrorHandler
+from utils.security_models import SecureChatMessage, SecureSessionAction, SecureSessionConfigRequest, SecurityHeaders
+from middleware.security_middleware import SecurityMiddleware, CORSSecurityMiddleware
+from middleware.rate_limiter import RateLimitManager
+from monitoring.stability_monitor import stability_monitor, CircuitBreakerConfig, CircuitState
+from monitoring.fallback_system import fallback_system, FallbackConfig, FallbackStrategy
 
 # Importar novas rotas
 try:
-    from session_routes import router as session_router
-    from logging_routes import router as logging_router
-    from projects_routes import router as projects_router
-    from metrics_routes import router as metrics_router
+    from routes.session_routes import router as session_router
+    from routes.logging_routes import router as logging_router
+    from routes.projects_routes import router as projects_router
+    from routes.metrics_routes import router as metrics_router
     ENHANCED_ROUTES_AVAILABLE = True
 except ImportError:
     ENHANCED_ROUTES_AVAILABLE = False

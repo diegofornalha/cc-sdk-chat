@@ -12,8 +12,12 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 
-from logging_config import get_contextual_logger
-from exception_middleware import handle_errors
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.logging_config import get_contextual_logger
+from middleware.exception_middleware import handle_errors
 
 
 @dataclass

@@ -12,12 +12,17 @@ import time
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
-from logging_config import get_contextual_logger
-from exception_middleware import handle_errors
-from session_manager import ClaudeCodeSessionManager
+# Adiciona imports do projeto
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from utils.logging_config import get_contextual_logger
+from middleware.exception_middleware import handle_errors
+from core.session_manager import ClaudeCodeSessionManager
 
 # Adiciona o diretório do SDK ao path  
-sdk_dir = os.path.join(os.path.dirname(__file__), 'claude-code-sdk-python')
+sdk_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'claude-code-sdk-python')
 sys.path.insert(0, sdk_dir)
 
 from src import (
