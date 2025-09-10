@@ -4,7 +4,7 @@ import json
 import os
 from collections.abc import AsyncIterable, AsyncIterator
 from dataclasses import replace
-from typing import Any
+from typing import Any, Optional, Dict, Union, List
 
 from ._errors import CLIConnectionError
 from .types import ClaudeCodeOptions, HookEvent, HookMatcher, Message, ResultMessage
@@ -92,20 +92,46 @@ class ClaudeSDKClient:
         ```
     """
 
-    def __init__(self, options: ClaudeCodeOptions | None = None):
-        """Initialize Claude SDK client."""
+    def __init__(self, options: Optional[ClaudeCodeOptions] = None):
+        """Initialize Claude SDK client.
+        
+        Args:
+            options: Optional configuration for the client. If not provided,
+                    uses default ClaudeCodeOptions(). Common options include:
+                    - system_prompt: Custom system prompt for Claude
+                    - cwd: Working directory for file operations
+                    - permission_mode: How to handle tool permissions
+                    - mcp_servers: MCP server configurations
+                    - allowed_tools: List of allowed tool names
+                    
+        Example:
+            Basic initialization:
+            >>> client = ClaudeSDKClient()
+            
+            With custom options:
+            >>> options = ClaudeCodeOptions(
+            ...     system_prompt="You are a Python expert",
+            ...     cwd="/home/user/project",
+            ...     permission_mode="acceptEdits"
+            ... )
+            >>> client = ClaudeSDKClient(options)
+            
+        Note:
+            The client must be connected before use. Either use the async
+            context manager or call connect() explicitly.
+        """
         if options is None:
             options = ClaudeCodeOptions()
         self.options = options
-        self._transport: Any | None = None
-        self._query: Any | None = None
+        self._transport: Optional[Any] = None
+        self._query: Optional[Any] = None
         os.environ["CLAUDE_CODE_ENTRYPOINT"] = "sdk-py-client"
 
     def _convert_hooks_to_internal_format(
-        self, hooks: dict[HookEvent, list[HookMatcher]]
-    ) -> dict[str, list[dict[str, Any]]]:
+        self, hooks: Dict[HookEvent, List[HookMatcher]]
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """Convert HookMatcher format to internal Query format."""
-        internal_hooks: dict[str, list[dict[str, Any]]] = {}
+        internal_hooks: Dict[str, List[Dict[str, Any]]] = {}
         for event, matchers in hooks.items():
             internal_hooks[event] = []
             for matcher in matchers:
@@ -118,15 +144,44 @@ class ClaudeSDKClient:
         return internal_hooks
 
     async def connect(
-        self, prompt: str | AsyncIterable[dict[str, Any]] | None = None
+        self, prompt: Optional[Union[str, AsyncIterable[Dict[str, Any]]]] = None
     ) -> None:
-        """Connect to Claude with a prompt or message stream."""
+        """Connect to Claude with a prompt or message stream.
+        
+        Args:
+            prompt: Optional initial prompt to send. Can be:
+                   - None: Opens interactive connection (default)
+                   - str: Single message to send
+                   - AsyncIterable: Stream of message dictionaries
+                   
+        Raises:
+            CLIConnectionError: If connection fails
+            ValidationError: If options are invalid (e.g., can_use_tool with string prompt)
+            CLINotFoundError: If Claude Code CLI is not installed
+            
+        Example:
+            Connect with no initial prompt (interactive):
+            >>> await client.connect()
+            
+            Connect with initial string prompt:
+            >>> await client.connect("Hello Claude")
+            
+            Connect with message stream:
+            >>> async def messages():
+            ...     yield {"type": "user", "message": {"role": "user", "content": "Hi"}}
+            >>> await client.connect(messages())
+            
+        Note:
+            - Auto-connects with empty stream if prompt is None
+            - Sets up transport and control protocol handling
+            - Validates permission settings
+        """
 
         from ._internal.query import Query
         from ._internal.transport.subprocess_cli import SubprocessCLITransport
 
         # Auto-connect with empty async iterable if no prompt is provided
-        async def _empty_stream() -> AsyncIterator[dict[str, Any]]:
+        async def _empty_stream() -> AsyncIterator[Dict[str, Any]]:
             # Never yields, but indicates that this function is an iterator and
             # keeps the connection open.
             # This yield is never reached but makes this an async generator
@@ -189,7 +244,36 @@ class ClaudeSDKClient:
             self._query._tg.start_soon(self._query.stream_input, prompt)
 
     async def receive_messages(self) -> AsyncIterator[Message]:
-        """Receive all messages from Claude."""
+        """Receive all messages from Claude.
+        
+        Continuously yields messages from the ongoing conversation.
+        This iterator runs indefinitely until the connection is closed.
+        
+        Yields:
+            Message: Various message types including:
+                    - UserMessage: User input messages
+                    - AssistantMessage: Claude's responses
+                    - SystemMessage: System notifications
+                    - ResultMessage: Request completion with usage stats
+                    
+        Raises:
+            CLIConnectionError: If not connected
+            MessageParseError: If message parsing fails
+            
+        Example:
+            Process all messages:
+            >>> async for message in client.receive_messages():
+            ...     if isinstance(message, AssistantMessage):
+            ...         for block in message.content:
+            ...             if isinstance(block, TextBlock):
+            ...                 print(block.text)
+            ...     elif isinstance(message, ResultMessage):
+            ...         print(f"Tokens used: {message.usage.output_tokens}")
+            
+        Note:
+            For single-response scenarios, consider using receive_response()
+            which automatically stops after a ResultMessage.
+        """
         if not self._query:
             raise CLIConnectionError("Not connected. Call connect() first.")
 
@@ -199,14 +283,41 @@ class ClaudeSDKClient:
             yield parse_message(data)
 
     async def query(
-        self, prompt: str | AsyncIterable[dict[str, Any]], session_id: str = "default"
+        self, prompt: Union[str, AsyncIterable[Dict[str, Any]]], session_id: str = "default"
     ) -> None:
-        """
-        Send a new request in streaming mode.
+        """Send a new request in streaming mode.
+
+        This method allows sending messages to Claude after the initial connection.
+        Use this for follow-up questions or continuing the conversation.
 
         Args:
-            prompt: Either a string message or an async iterable of message dictionaries
-            session_id: Session identifier for the conversation
+            prompt: Either a string message or an async iterable of message dictionaries.
+                   String prompts are converted to user messages automatically.
+            session_id: Session identifier for the conversation. Default is "default".
+                       Use different session IDs to maintain separate conversation contexts.
+                       
+        Raises:
+            CLIConnectionError: If not connected
+            
+        Example:
+            Send a simple string message:
+            >>> await client.query("What's the weather like?")
+            
+            Send with custom session:
+            >>> await client.query("Remember this number: 42", session_id="memory_test")
+            >>> # Later in the same session...
+            >>> await client.query("What number did I ask you to remember?", session_id="memory_test")
+            
+            Stream multiple messages:
+            >>> async def follow_ups():
+            ...     yield {"type": "user", "message": {"role": "user", "content": "First question"}}
+            ...     yield {"type": "user", "message": {"role": "user", "content": "Second question"}}
+            >>> await client.query(follow_ups())
+            
+        Note:
+            - This method doesn't wait for or return responses
+            - Use receive_messages() or receive_response() to get Claude's replies
+            - Messages are sent immediately when called
         """
         if not self._query or not self._transport:
             raise CLIConnectionError("Not connected. Call connect() first.")
@@ -234,7 +345,7 @@ class ClaudeSDKClient:
             raise CLIConnectionError("Not connected. Call connect() first.")
         await self._query.interrupt()
 
-    async def get_server_info(self) -> dict[str, Any] | None:
+    async def get_server_info(self) -> Optional[Dict[str, Any]]:
         """Get server initialization info including available commands and output styles.
 
         Returns initialization information from the Claude Code server including:

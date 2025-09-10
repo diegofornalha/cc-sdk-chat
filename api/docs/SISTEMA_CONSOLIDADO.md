@@ -1,4 +1,5 @@
 # 📚 Documentação Consolidada - CC-SDK-CHAT
+**Versão: 0.0.21**
 
 ## 🎯 Visão Geral
 Sistema de chat integrado com Claude Code SDK, fornecendo interface web para conversas com IA.

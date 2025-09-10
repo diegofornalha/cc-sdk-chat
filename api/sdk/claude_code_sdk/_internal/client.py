@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncIterable, AsyncIterator
 from dataclasses import replace
-from typing import Any
+from typing import Any, Dict, List, Union, Optional
 
 from ..types import (
     ClaudeCodeOptions,
@@ -23,10 +23,10 @@ class InternalClient:
         """Initialize the internal client."""
 
     def _convert_hooks_to_internal_format(
-        self, hooks: dict[HookEvent, list[HookMatcher]]
-    ) -> dict[str, list[dict[str, Any]]]:
+        self, hooks: Dict[HookEvent, List[HookMatcher]]
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """Convert HookMatcher format to internal Query format."""
-        internal_hooks: dict[str, list[dict[str, Any]]] = {}
+        internal_hooks: Dict[str, List[Dict[str, Any]]] = {}
         for event, matchers in hooks.items():
             internal_hooks[event] = []
             for matcher in matchers:
@@ -40,9 +40,9 @@ class InternalClient:
 
     async def process_query(
         self,
-        prompt: str | AsyncIterable[dict[str, Any]],
+        prompt: Union[str, AsyncIterable[Dict[str, Any]]],
         options: ClaudeCodeOptions,
-        transport: Transport | None = None,
+        transport: Optional[Transport] = None,
     ) -> AsyncIterator[Message]:
         """Process a query through transport and Query."""
 

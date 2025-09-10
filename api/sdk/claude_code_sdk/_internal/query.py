@@ -5,7 +5,7 @@ import logging
 import os
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable
 from contextlib import suppress
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import anyio
 from mcp.types import (
@@ -46,13 +46,12 @@ class Query:
         self,
         transport: Transport,
         is_streaming_mode: bool,
-        can_use_tool: Callable[
-            [str, dict[str, Any], ToolPermissionContext],
-            Awaitable[PermissionResultAllow | PermissionResultDeny],
-        ]
-        | None = None,
-        hooks: dict[str, list[dict[str, Any]]] | None = None,
-        sdk_mcp_servers: dict[str, "McpServer"] | None = None,
+        can_use_tool: Optional[Callable[
+            [str, Dict[str, Any], ToolPermissionContext],
+            Awaitable[Union[PermissionResultAllow, PermissionResultDeny]],
+        ]] = None,
+        hooks: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        sdk_mcp_servers: Optional[Dict[str, "McpServer"]] = None,
     ):
         """Initialize Query with transport and callbacks.
 
@@ -70,22 +69,22 @@ class Query:
         self.sdk_mcp_servers = sdk_mcp_servers or {}
 
         # Control protocol state
-        self.pending_control_responses: dict[str, anyio.Event] = {}
-        self.pending_control_results: dict[str, dict[str, Any] | Exception] = {}
-        self.hook_callbacks: dict[str, Callable[..., Any]] = {}
+        self.pending_control_responses: Dict[str, anyio.Event] = {}
+        self.pending_control_results: Dict[str, Union[Dict[str, Any], Exception]] = {}
+        self.hook_callbacks: Dict[str, Callable[..., Any]] = {}
         self.next_callback_id = 0
         self._request_counter = 0
 
         # Message stream
         self._message_send, self._message_receive = anyio.create_memory_object_stream[
-            dict[str, Any]
+            Dict[str, Any]
         ](max_buffer_size=100)
         self._tg: anyio.abc.TaskGroup | None = None
         self._initialized = False
         self._closed = False
-        self._initialization_result: dict[str, Any] | None = None
+        self._initialization_result: Optional[Dict[str, Any]] = None
 
-    async def initialize(self) -> dict[str, Any] | None:
+    async def initialize(self) -> Optional[Dict[str, Any]]:
         """Initialize control protocol if in streaming mode.
 
         Returns:
@@ -95,7 +94,7 @@ class Query:
             return None
 
         # Build hooks configuration for initialization
-        hooks_config: dict[str, Any] = {}
+        hooks_config: Dict[str, Any] = {}
         if self.hooks:
             for event, matchers in self.hooks.items():
                 if matchers:
@@ -191,7 +190,7 @@ class Query:
         subtype = request_data["subtype"]
 
         try:
-            response_data: dict[str, Any] = {}
+            response_data: Dict[str, Any] = {}
 
             if subtype == "can_use_tool":
                 permission_request: SDKControlPermissionRequest = request_data  # type: ignore[assignment]
@@ -282,7 +281,7 @@ class Query:
             }
             await self.transport.write(json.dumps(error_response) + "\n")
 
-    async def _send_control_request(self, request: dict[str, Any]) -> dict[str, Any]:
+    async def _send_control_request(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Send control request to CLI and wait for response."""
         if not self.is_streaming_mode:
             raise Exception("Control requests require streaming mode")
@@ -323,8 +322,8 @@ class Query:
             raise Exception(f"Control request timeout: {request.get('subtype')}") from e
 
     async def _handle_sdk_mcp_request(
-        self, server_name: str, message: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, server_name: str, message: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Handle an MCP request for an SDK server.
 
         This acts as a bridge between JSONRPC messages from the CLI
@@ -469,7 +468,7 @@ class Query:
             }
         )
 
-    async def stream_input(self, stream: AsyncIterable[dict[str, Any]]) -> None:
+    async def stream_input(self, stream: AsyncIterable[Dict[str, Any]]) -> None:
         """Stream input messages to transport."""
         try:
             async for message in stream:
@@ -481,7 +480,7 @@ class Query:
         except Exception as e:
             logger.debug(f"Error streaming input: {e}")
 
-    async def receive_messages(self) -> AsyncIterator[dict[str, Any]]:
+    async def receive_messages(self) -> AsyncIterator[Dict[str, Any]]:
         """Receive SDK messages (not control messages)."""
         async for message in self._message_receive:
             # Check for special messages
@@ -503,11 +502,11 @@ class Query:
         await self.transport.close()
 
     # Make Query an async iterator
-    def __aiter__(self) -> AsyncIterator[dict[str, Any]]:
+    def __aiter__(self) -> AsyncIterator[Dict[str, Any]]:
         """Return async iterator for messages."""
         return self.receive_messages()
 
-    async def __anext__(self) -> dict[str, Any]:
+    async def __anext__(self) -> Dict[str, Any]:
         """Get next message."""
         async for message in self.receive_messages():
             return message

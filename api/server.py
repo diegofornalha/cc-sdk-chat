@@ -296,7 +296,7 @@ app = FastAPI(
     data: {"type": "done", "session_id": "uuid"}
     ```
     """,
-    version="1.0.0",
+    version="0.0.21",
     contact={
         "name": "Suporte API",
         "email": "api@example.com"
@@ -491,7 +491,7 @@ class DetailedHealthResponse(BaseModel):
     """Resposta detalhada do health check."""
     status: str = Field(..., description="Status geral", example="healthy")
     service: str = Field(..., description="Nome do serviço", example="Claude Chat API")
-    version: str = Field(..., description="Versão da API", example="1.0.0")
+    version: str = Field(..., description="Versão da API", example="0.0.21")
     uptime_seconds: float = Field(..., description="Tempo de atividade em segundos")
     timestamp: str = Field(..., description="Timestamp da verificação")
     sessions: Dict[str, Any] = Field(..., description="Estatísticas de sessões")
@@ -650,7 +650,7 @@ async def detailed_health() -> DetailedHealthResponse:
     return DetailedHealthResponse(
         status=overall_status,
         service="Claude Chat API",
-        version="1.0.0",
+        version="0.0.21",
         uptime_seconds=uptime,
         timestamp=current_time.isoformat(),
         sessions=session_info,

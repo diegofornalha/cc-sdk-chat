@@ -1,0 +1,1 @@
+# MCP stub for Python 3.9 compatibility

@@ -3,20 +3,12 @@
 Rotas de gerenciamento de sessões
 Centraliza toda lógica de sessões no backend
 """
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException
 from typing import Optional, Dict, List
-from datetime import datetime, timedelta
+from datetime import datetime
 from pydantic import BaseModel, Field
 import uuid
-import jwt
-import json
-import redis
 from pathlib import Path
-
-# Configurações
-SECRET_KEY = "sua-chave-secreta-aqui"  # Em produção, use variável de ambiente
-ALGORITHM = "HS256"
-TOKEN_EXPIRE_HOURS = 24
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -34,9 +26,7 @@ class SessionCreate(BaseModel):
 class SessionResponse(BaseModel):
     """Resposta de sessão"""
     session_id: str
-    token: str
     created_at: datetime
-    expires_at: datetime
     metadata: dict
 
 class SessionHistory(BaseModel):
@@ -58,52 +48,14 @@ class SessionMetrics(BaseModel):
     average_response_time: float
     cache_hit_rate: float
 
-# Funções auxiliares
-def create_token(data: dict) -> str:
-    """Cria JWT token"""
-    expire = datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS)
-    data.update({"exp": expire})
-    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
-
-def verify_token(token: str) -> dict:
-    """Verifica e decodifica JWT token"""
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Token inválido")
-
-def get_current_session(authorization: Optional[str] = Header(None)) -> dict:
-    """Dependência para obter sessão atual do token"""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Token não fornecido")
-    
-    token = authorization.split(" ")[1]
-    payload = verify_token(token)
-    
-    session_id = payload.get("session_id")
-    if not session_id or session_id not in sessions_cache:
-        raise HTTPException(status_code=404, detail="Sessão não encontrada")
-    
-    return sessions_cache[session_id]
-
 # Rotas
 @router.post("/create", response_model=SessionResponse)
 async def create_session(data: SessionCreate):
     """
     Cria nova sessão com UUID único
-    Retorna token JWT para autenticação
     """
     # Gerar UUID único
     session_id = str(uuid.uuid4())
-    
-    # Criar token JWT
-    token_data = {
-        "session_id": session_id,
-        "user_id": data.user_id or "anonymous",
-        "created_at": datetime.utcnow().isoformat()
-    }
-    token = create_token(token_data)
     
     # Salvar sessão no cache
     session_data = {
@@ -119,7 +71,7 @@ async def create_session(data: SessionCreate):
             "total_cost_usd": 0.0,
             "message_count": 0
         },
-        "metadata": data.metadata
+        "metadata": data.metadata or {}
     }
     
     sessions_cache[session_id] = session_data
@@ -132,24 +84,15 @@ async def create_session(data: SessionCreate):
     
     return SessionResponse(
         session_id=session_id,
-        token=token,
         created_at=session_data["created_at"],
-        expires_at=datetime.utcnow() + timedelta(hours=TOKEN_EXPIRE_HOURS),
-        metadata=data.metadata
+        metadata=session_data["metadata"]
     )
 
 @router.get("/{session_id}/history", response_model=SessionHistory)
-async def get_session_history(
-    session_id: str,
-    current_session: dict = Depends(get_current_session)
-):
+async def get_session_history(session_id: str):
     """
     Retorna histórico completo da sessão
-    Requer autenticação via token
     """
-    if session_id != current_session["session_id"]:
-        raise HTTPException(status_code=403, detail="Acesso negado")
-    
     session = sessions_cache.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
@@ -166,17 +109,10 @@ async def get_session_history(
     )
 
 @router.get("/{session_id}/metrics", response_model=SessionMetrics)
-async def get_session_metrics(
-    session_id: str,
-    current_session: dict = Depends(get_current_session)
-):
+async def get_session_metrics(session_id: str):
     """
     Retorna métricas agregadas da sessão
-    Cálculos feitos no servidor
     """
-    if session_id != current_session["session_id"]:
-        raise HTTPException(status_code=403, detail="Acesso negado")
-    
     session = sessions_cache.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
@@ -216,16 +152,11 @@ async def update_session_metrics(
     tokens_output: int,
     cost_usd: float,
     response_time: Optional[float] = None,
-    cache_hit: Optional[bool] = None,
-    current_session: dict = Depends(get_current_session)
+    cache_hit: Optional[bool] = None
 ):
     """
     Atualiza métricas da sessão
-    Chamado internamente pela API após cada mensagem
     """
-    if session_id != current_session["session_id"]:
-        raise HTTPException(status_code=403, detail="Acesso negado")
-    
     session = sessions_cache.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Sessão não encontrada")
@@ -282,45 +213,92 @@ async def get_user_sessions(user_id: str):
     }
 
 @router.delete("/{session_id}")
-async def delete_session(
-    session_id: str,
-    current_session: dict = Depends(get_current_session)
-):
+async def delete_session(session_id: str):
     """
     Remove sessão do cache
     """
-    if session_id != current_session["session_id"]:
-        raise HTTPException(status_code=403, detail="Acesso negado")
+    if session_id not in sessions_cache:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
     
-    if session_id in sessions_cache:
-        session = sessions_cache[session_id]
-        user_id = session.get("user_id", "anonymous")
-        
-        # Remover da lista do usuário
-        if user_id in user_sessions:
-            user_sessions[user_id] = [
-                sid for sid in user_sessions[user_id] if sid != session_id
-            ]
-        
-        # Remover do cache
-        del sessions_cache[session_id]
-        
-        return {"status": "success", "message": "Sessão removida"}
+    session = sessions_cache[session_id]
+    user_id = session.get("user_id", "anonymous")
     
-    raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    # Remover da lista do usuário
+    if user_id in user_sessions:
+        user_sessions[user_id] = [
+            sid for sid in user_sessions[user_id] if sid != session_id
+        ]
+    
+    # Remover do cache
+    del sessions_cache[session_id]
+    
+    return {"status": "success", "message": "Sessão removida"}
 
-@router.post("/validate")
-async def validate_session(authorization: Optional[str] = Header(None)):
+@router.get("/{session_id}/exists")
+async def check_session_exists(session_id: str):
     """
-    Valida se token/sessão ainda é válido
+    Verifica se uma sessão existe
     """
-    try:
-        session = get_current_session(authorization)
+    exists = session_id in sessions_cache
+    
+    if exists:
+        session = sessions_cache[session_id]
         return {
-            "valid": True,
-            "session_id": session["session_id"],
+            "exists": True,
+            "session_id": session_id,
             "user_id": session.get("user_id"),
             "last_activity": session["last_activity"]
         }
-    except HTTPException:
-        return {"valid": False}
+    
+    return {"exists": False, "session_id": session_id}
+
+@router.post("/{session_id}/add-message")
+async def add_message_to_session(
+    session_id: str,
+    role: str,
+    content: str,
+    metadata: Optional[dict] = None
+):
+    """
+    Adiciona uma mensagem ao histórico da sessão
+    """
+    session = sessions_cache.get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Sessão não encontrada")
+    
+    message = {
+        "role": role,
+        "content": content,
+        "timestamp": datetime.utcnow().isoformat(),
+        "metadata": metadata or {}
+    }
+    
+    session["messages"].append(message)
+    session["last_activity"] = datetime.utcnow()
+    
+    return {
+        "status": "success",
+        "message_count": len(session["messages"])
+    }
+
+@router.get("/active")
+async def get_active_sessions():
+    """
+    Retorna todas as sessões ativas (últimas 24 horas)
+    """
+    cutoff_time = datetime.utcnow().timestamp() - (24 * 60 * 60)  # 24 horas atrás
+    
+    active_sessions = []
+    for session_id, session in sessions_cache.items():
+        if session["last_activity"].timestamp() > cutoff_time:
+            active_sessions.append({
+                "session_id": session_id,
+                "user_id": session.get("user_id"),
+                "last_activity": session["last_activity"],
+                "message_count": session["metrics"]["message_count"]
+            })
+    
+    return {
+        "total_active": len(active_sessions),
+        "sessions": sorted(active_sessions, key=lambda x: x["last_activity"], reverse=True)
+    }

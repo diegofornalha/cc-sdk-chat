@@ -5,6 +5,7 @@ import logging
 import os
 import shutil
 from collections.abc import AsyncIterable, AsyncIterator
+from typing import Any, Dict, List, Union, Optional
 from contextlib import suppress
 from pathlib import Path
 from subprocess import PIPE
@@ -29,20 +30,20 @@ class SubprocessCLITransport(Transport):
 
     def __init__(
         self,
-        prompt: str | AsyncIterable[dict[str, Any]],
+        prompt: Union[str, AsyncIterable[Dict[str, Any]]],
         options: ClaudeCodeOptions,
-        cli_path: str | Path | None = None,
+        cli_path: Optional[Union[str, Path]] = None,
     ):
         self._prompt = prompt
         self._is_streaming = not isinstance(prompt, str)
         self._options = options
         self._cli_path = str(cli_path) if cli_path else self._find_cli()
         self._cwd = str(options.cwd) if options.cwd else None
-        self._process: Process | None = None
-        self._stdout_stream: TextReceiveStream | None = None
-        self._stdin_stream: TextSendStream | None = None
+        self._process: Optional[Process] = None
+        self._stdout_stream: Optional[TextReceiveStream] = None
+        self._stdin_stream: Optional[TextSendStream] = None
         self._ready = False
-        self._exit_error: Exception | None = None  # Track process exit errors
+        self._exit_error: Optional[Exception] = None  # Track process exit errors
 
     def _find_cli(self) -> str:
         """Find Claude Code CLI binary."""
@@ -79,7 +80,7 @@ class SubprocessCLITransport(Transport):
             "  SubprocessCLITransport(..., cli_path='/path/to/claude')"
         )
 
-    def _build_command(self) -> list[str]:
+    def _build_command(self) -> List[str]:
         """Build CLI command with arguments."""
         cmd = [self._cli_path, "--output-format", "stream-json", "--verbose"]
 
@@ -126,11 +127,11 @@ class SubprocessCLITransport(Transport):
         if self._options.mcp_servers:
             if isinstance(self._options.mcp_servers, dict):
                 # Process all servers, stripping instance field from SDK servers
-                servers_for_cli: dict[str, Any] = {}
+                servers_for_cli: Dict[str, Any] = {}
                 for name, config in self._options.mcp_servers.items():
                     if isinstance(config, dict) and config.get("type") == "sdk":
                         # For SDK servers, pass everything except the instance field
-                        sdk_config: dict[str, object] = {
+                        sdk_config: Dict[str, object] = {
                             k: v for k, v in config.items() if k != "instance"
                         }
                         servers_for_cli[name] = sdk_config
@@ -296,11 +297,11 @@ class SubprocessCLITransport(Transport):
                 await self._stdin_stream.aclose()
             self._stdin_stream = None
 
-    def read_messages(self) -> AsyncIterator[dict[str, Any]]:
+    def read_messages(self) -> AsyncIterator[Dict[str, Any]]:
         """Read and parse messages from the transport."""
         return self._read_messages_impl()
 
-    async def _read_messages_impl(self) -> AsyncIterator[dict[str, Any]]:
+    async def _read_messages_impl(self) -> AsyncIterator[Dict[str, Any]]:
         """Internal implementation of read_messages."""
         if not self._process or not self._stdout_stream:
             raise CLIConnectionError("Not connected")

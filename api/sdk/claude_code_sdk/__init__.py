@@ -2,14 +2,22 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, Union, Dict, List, Optional
 
 from ._errors import (
-    ClaudeSDKError,
+    AuthenticationError,
     CLIConnectionError,
     CLIJSONDecodeError,
     CLINotFoundError,
+    ClaudeSDKError,
+    ConfigurationError,
+    MessageParseError,
     ProcessError,
+    ProtocolError,
+    RateLimitError,
+    TimeoutError,
+    TransportError,
+    ValidationError,
 )
 from ._internal.transport import Transport
 from .client import ClaudeSDKClient
@@ -51,13 +59,13 @@ class SdkMcpTool(Generic[T]):
 
     name: str
     description: str
-    input_schema: type[T] | dict[str, Any]
-    handler: Callable[[T], Awaitable[dict[str, Any]]]
+    input_schema: Union[type[T], Dict[str, Any]]
+    handler: Callable[[T], Awaitable[Dict[str, Any]]]
 
 
 def tool(
-    name: str, description: str, input_schema: type | dict[str, Any]
-) -> Callable[[Callable[[Any], Awaitable[dict[str, Any]]]], SdkMcpTool[Any]]:
+    name: str, description: str, input_schema: Union[type, Dict[str, Any]]
+) -> Callable[[Callable[[Any], Awaitable[Dict[str, Any]]]], SdkMcpTool[Any]]:
     """Decorator for defining MCP tools with type safety.
 
     Creates a tool that can be used with SDK MCP servers. The tool runs
@@ -106,7 +114,7 @@ def tool(
     """
 
     def decorator(
-        handler: Callable[[Any], Awaitable[dict[str, Any]]],
+        handler: Callable[[Any], Awaitable[Dict[str, Any]]],
     ) -> SdkMcpTool[Any]:
         return SdkMcpTool(
             name=name,
@@ -119,7 +127,7 @@ def tool(
 
 
 def create_sdk_mcp_server(
-    name: str, version: str = "1.0.0", tools: list[SdkMcpTool[Any]] | None = None
+    name: str, version: str = "1.0.0", tools: Optional[List[SdkMcpTool[Any]]] = None
 ) -> McpSdkServerConfig:
     """Create an in-process MCP server that runs within your Python application.
 
@@ -249,7 +257,7 @@ def create_sdk_mcp_server(
 
         # Register call_tool handler to execute tools
         @server.call_tool()  # type: ignore[misc]
-        async def call_tool(name: str, arguments: dict[str, Any]) -> Any:
+        async def call_tool(name: str, arguments: Dict[str, Any]) -> Any:
             """Execute a tool by name with given arguments."""
             if name not in tool_map:
                 raise ValueError(f"Tool '{name}' not found")
@@ -274,9 +282,11 @@ def create_sdk_mcp_server(
     return McpSdkServerConfig(type="sdk", name=name, instance=server)
 
 
-__version__ = "0.0.21"
+__version__ = "0.1.0"
 
 __all__ = [
+    # Version
+    "__version__",
     # Main exports
     "query",
     # Transport
@@ -317,4 +327,12 @@ __all__ = [
     "CLINotFoundError",
     "ProcessError",
     "CLIJSONDecodeError",
+    "MessageParseError",
+    "ValidationError",
+    "TimeoutError",
+    "AuthenticationError",
+    "RateLimitError",
+    "TransportError",
+    "ProtocolError",
+    "ConfigurationError",
 ]

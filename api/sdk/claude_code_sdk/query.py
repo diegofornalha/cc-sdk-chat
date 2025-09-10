@@ -2,7 +2,7 @@
 
 import os
 from collections.abc import AsyncIterable, AsyncIterator
-from typing import Any
+from typing import Any, Dict, Union, Optional
 
 from ._internal.client import InternalClient
 from ._internal.transport import Transport
@@ -11,9 +11,9 @@ from .types import ClaudeCodeOptions, Message
 
 async def query(
     *,
-    prompt: str | AsyncIterable[dict[str, Any]],
-    options: ClaudeCodeOptions | None = None,
-    transport: Transport | None = None,
+    prompt: Union[str, AsyncIterable[Dict[str, Any]]],
+    options: Optional[ClaudeCodeOptions] = None,
+    transport: Optional[Transport] = None,
 ) -> AsyncIterator[Message]:
     """
     Query Claude Code for one-shot or unidirectional streaming interactions.
