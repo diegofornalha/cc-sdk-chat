@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Bot, FolderOpen, MessageSquare, Clock, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { SystemStatus } from '@/components/SystemStatus';
+import { SystemStatus } from '../src/components/SystemStatus';
 
 interface WebSession {
   id: string;

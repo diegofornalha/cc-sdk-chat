@@ -64,13 +64,10 @@ async def monitor_latest_jsonl(project_name: str) -> AsyncGenerator[str, None]:
                                             if content.get('type') == 'text':
                                                 text = content.get('text', '')
                                                 
-                                                # Divide em chunks pequenos
-                                                words = text.split()
-                                                for i in range(0, len(words), 2):
-                                                    chunk = ' '.join(words[i:i+2])
-                                                    if chunk:
-                                                        yield f"data: {json.dumps({'type': 'text_chunk', 'content': chunk + ' ', 'session_id': 'realtime'})}\n\n"
-                                                        await asyncio.sleep(0.05)
+                                                # Envia o texto direto, sem abstrações
+                                                if text:
+                                                    yield f"data: {json.dumps({'type': 'text_chunk', 'content': text, 'session_id': 'realtime'})}\n\n"
+                                                    await asyncio.sleep(0.01)
                                 
                             except json.JSONDecodeError:
                                 pass
@@ -142,13 +139,18 @@ async def get_latest_messages(project_name: str, limit: int = 10):
                     elif data.get('type') == 'assistant' and data.get('message'):
                         msg = data['message']
                         if 'content' in msg and isinstance(msg['content'], list):
+                            # Pega apenas o texto, ignora ferramentas
+                            text_content = ''
                             for content in msg['content']:
                                 if content.get('type') == 'text':
-                                    messages.append({
-                                        'role': 'assistant',
-                                        'content': content.get('text', ''),
-                                        'timestamp': data.get('timestamp')
-                                    })
+                                    text_content += content.get('text', '')
+                            
+                            if text_content:
+                                messages.append({
+                                    'role': 'assistant',
+                                    'content': text_content,
+                                    'timestamp': data.get('timestamp')
+                                })
                     
                 except json.JSONDecodeError:
                     pass

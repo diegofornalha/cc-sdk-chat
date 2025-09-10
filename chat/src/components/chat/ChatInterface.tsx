@@ -504,11 +504,11 @@ export function ChatInterface({
       if (command === '/clear') {
         if (activeSessionId) {
           // Limpa mensagens da sessão
-          const updatedSessions = sessions.map(s => 
-            s.id === activeSessionId 
-              ? { ...s, messages: [] }
-              : s
-          );
+          const updatedSessions = new Map(sessions);
+          const session = updatedSessions.get(activeSessionId);
+          if (session) {
+            updatedSessions.set(activeSessionId, { ...session, messages: [] });
+          }
           setSessions(updatedSessions);
         }
         return;
@@ -564,7 +564,7 @@ export function ChatInterface({
 
     // Inicia streaming IMEDIATAMENTE
     setStreaming(true);
-    setStreamingContent("🔍 Analisando..."); // Mostra que está processando
+    setStreamingContent(""); // Começa vazio, vai ser preenchido pelo streaming
     
     // Força atualização visual imediata
     requestAnimationFrame(() => {

@@ -3,9 +3,12 @@ const nextConfig = {
   // Desabilita Strict Mode para evitar duplicação em dev
   reactStrictMode: false,
   
-  // Configurações específicas do projeto
+  // Configurações específicas para Next.js 15
   experimental: {
-    // Habilita recursos experimentais se necessário
+    // Otimizações de performance para Next.js 15
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+    // Suporte aprimorado para React 19
+    ppr: false,
   },
   
   // Configurações de build
@@ -21,11 +24,21 @@ const nextConfig = {
     ignoreDuringBuilds: false,
   },
   
-  // Configurações de desenvolvimento
+  // Configurações de desenvolvimento (Next.js 15)
   devIndicators: {
-    buildActivity: true,
-    buildActivityPosition: 'bottom-right'
-  }
+    appIsrStatus: true,
+    buildActivity: false,
+  },
+
+  // Configuração de webpack para resolver caminhos
+  webpack: (config) => {
+    // Garante que os aliases de path estão configurados corretamente
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': require('path').resolve(__dirname, './src'),
+    };
+    return config;
+  },
 }
 
 module.exports = nextConfig
