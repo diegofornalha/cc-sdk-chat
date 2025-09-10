@@ -5,6 +5,7 @@ import { SessionTabs } from "../session/SessionTabs";
 // ProcessingIndicator removido - mostra conteúdo direto
 import { ChatErrorBoundary } from "../error/ChatErrorBoundary";
 import SessionErrorBoundary from "../error/SessionErrorBoundary";
+import { NetworkMonitor } from "../debug/NetworkMonitor";
 import { useSessionRecovery } from "@/hooks/useSessionRecovery";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
@@ -266,7 +267,7 @@ export function ChatInterface({
     }
   }, [isStreaming, scrollToBottom]);
 
-  // Polling em tempo real - DIRETO E SIMPLES
+  // Polling em tempo real - SEM TIMEOUT
   React.useEffect(() => {
     if (!isStreaming) return;
     
@@ -304,18 +305,12 @@ export function ChatInterface({
       }
     );
     
-    // Timeout máximo de 8 segundos
-    const timeout = setTimeout(() => {
-      if (!gotResponse) {
-        console.warn('⏱️ Timeout - desbloqueando chat');
-        setStreaming(false);
-        setStreamingContent("");
-      }
-    }, 8000);
+    // SEM TIMEOUT - Chat nunca trava
+    // O usuário pode usar o botão de interromper se quiser
+    console.log('🔓 Chat sem timeout - use Ctrl+C ou botão para interromper');
     
     return () => {
       stopPolling();
-      clearTimeout(timeout);
     };
   }, [isStreaming, activeSessionId, addMessage]);
 
@@ -460,6 +455,82 @@ export function ChatInterface({
 
   const handleSendMessage = async (content: string) => {
     if (isStreaming) return;
+    
+    // Verifica comandos especiais
+    if (content.startsWith('/')) {
+      const command = content.toLowerCase().trim();
+      
+      // Comando /mcp - Envia direto para o Claude processar
+      if (command === '/mcp' || command.startsWith('/mcp ')) {
+        // Não retorna - deixa o comando ser processado pelo Claude
+        // O Claude Code SDK reconhece comandos /mcp nativamente
+      }
+      
+      // Comando /help
+      if (command === '/help' || command === '/?') {
+        if (activeSessionId) {
+          addMessage(activeSessionId, {
+            role: "user",
+            content,
+            timestamp: new Date(),
+          });
+          
+          const helpText = `📚 **Comandos Disponíveis**\n\n` +
+            `**/mcp** - Informações sobre Model Context Protocol\n` +
+            `**/clear** - Limpar conversa atual\n` +
+            `**/export** - Exportar conversa\n` +
+            `**/help** - Mostrar esta ajuda\n\n` +
+            `**Atalhos de Teclado**:\n` +
+            `• **Ctrl+Enter** - Enviar mensagem\n` +
+            `• **Ctrl+Shift+N** - Monitor de Rede\n` +
+            `• **Ctrl+C** - Interromper resposta`;
+          
+          addMessage(activeSessionId, {
+            role: "assistant",
+            content: helpText,
+            timestamp: new Date(),
+          });
+        }
+        return;
+      }
+      
+      // Comando /clear
+      if (command === '/clear') {
+        if (activeSessionId) {
+          // Limpa mensagens da sessão
+          const updatedSessions = sessions.map(s => 
+            s.id === activeSessionId 
+              ? { ...s, messages: [] }
+              : s
+          );
+          setSessions(updatedSessions);
+        }
+        return;
+      }
+      
+      // Comando /export
+      if (command === '/export') {
+        if (activeSession) {
+          const dataStr = JSON.stringify(activeSession.messages, null, 2);
+          const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
+          const exportFileDefaultName = `chat-export-${Date.now()}.json`;
+          
+          const linkElement = document.createElement("a");
+          linkElement.setAttribute("href", dataUri);
+          linkElement.setAttribute("download", exportFileDefaultName);
+          linkElement.click();
+          
+          if (activeSessionId) {
+            addMessage(activeSessionId, {
+              role: "assistant",
+              content: "✅ Conversa exportada com sucesso!",
+              timestamp: new Date(),
+            });
+          }
+        }
+        return;
+      }
+    }
 
     // 🚀 FLUXO SIMPLIFICADO - Sem redirecionamentos automáticos
     
@@ -877,6 +948,8 @@ export function ChatInterface({
 
   return (
     <div className="flex h-screen flex-col bg-background">
+      {/* Monitor de Rede - Ctrl+Shift+N para toggle */}
+      <NetworkMonitor />
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between px-4 py-3">
@@ -1032,7 +1105,7 @@ export function ChatInterface({
                       <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
                         <ChatMessage
                           role="assistant"
-                          content={streamingContent || "📦 Usando ferramenta..."}
+                          content={streamingContent || "🔄 Aguardando resposta... (sem timeout)"}
                           isStreaming
                           sessionTitle={activeSession?.title}
                           sessionId={activeSession?.id}

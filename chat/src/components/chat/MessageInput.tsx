@@ -157,7 +157,7 @@ Mensagem atual: ${finalMessage}`
               onCompositionStart={() => setIsComposing(true)}
               onCompositionEnd={() => setIsComposing(false)}
               placeholder={effectivePlaceholder}
-              disabled={isInputDisabled || isStreaming}
+              disabled={isInputDisabled}
               className={cn(
                 "w-full resize-none rounded-lg border bg-background px-4 py-3 pr-12",
                 "text-sm placeholder:text-muted-foreground",
@@ -183,7 +183,7 @@ Mensagem atual: ${finalMessage}`
               type="button"
               variant="outline"
               size="icon"
-              disabled={isInputDisabled || isStreaming}
+              disabled={isInputDisabled}
               className="h-[52px] w-[52px]"
               onClick={() => window.location.reload()}
               title="Atualizar página"
