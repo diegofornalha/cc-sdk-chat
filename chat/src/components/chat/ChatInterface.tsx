@@ -267,49 +267,55 @@ export function ChatInterface({
     }
   }, [isStreaming, scrollToBottom]);
 
-  // Polling em tempo real - SEM TIMEOUT
+  // Polling em tempo real - SEMPRE FUNCIONANDO
   React.useEffect(() => {
     if (!isStreaming) return;
     
     console.log('🚀 Iniciando streaming em tempo real');
     const projectName = window.location.pathname.split('/')[1] || '-Users-2a--claude-cc-sdk-chat-api';
-    let gotResponse = false;
+    let messageReceived = false;
+    let pollingActive = true;
     
     const stopPolling = api.startRealtimePolling(
       projectName,
       (message) => {
-        if (message.role === 'assistant' && message.content && !gotResponse) {
-          gotResponse = true;
-          console.log('📨 Resposta recebida:', message.content.substring(0, 50));
+        if (message.role === 'assistant' && message.content && pollingActive) {
+          console.log('📨 Nova mensagem do assistant:', message.content.substring(0, 50));
           
-          // Mostra a resposta imediatamente
+          // SEMPRE atualiza o conteúdo (não para no primeiro)
           setStreamingContent(message.content);
           
-          // Aguarda um pouco e finaliza
-          setTimeout(() => {
-            // Adiciona à sessão
-            if (activeSessionId) {
-              addMessage(activeSessionId, {
-                role: "assistant",
-                content: message.content,
-                timestamp: new Date(),
-              });
-            }
+          // Marca que recebeu mensagem
+          if (!messageReceived) {
+            messageReceived = true;
             
-            // Limpa streaming
-            setStreaming(false);
-            setStreamingContent("");
-            console.log('✅ Chat desbloqueado');
-          }, 500);
+            // Após 2 segundos da primeira mensagem, finaliza
+            setTimeout(() => {
+              if (activeSessionId && pollingActive) {
+                // Adiciona a última versão da mensagem
+                addMessage(activeSessionId, {
+                  role: "assistant",
+                  content: message.content,
+                  timestamp: new Date(),
+                });
+                
+                // Para o polling e limpa
+                pollingActive = false;
+                setStreaming(false);
+                setStreamingContent("");
+                console.log('✅ Resposta completa recebida');
+              }
+            }, 2000); // Aguarda 2 segundos para garantir que pegou tudo
+          }
         }
       }
     );
     
-    // SEM TIMEOUT - Chat nunca trava
-    // O usuário pode usar o botão de interromper se quiser
-    console.log('🔓 Chat sem timeout - use Ctrl+C ou botão para interromper');
+    // Sem timeout - continua até receber resposta completa
+    console.log('🔓 Polling ativo - aguardando resposta completa');
     
     return () => {
+      pollingActive = false;
       stopPolling();
     };
   }, [isStreaming, activeSessionId, addMessage]);
@@ -558,7 +564,7 @@ export function ChatInterface({
 
     // Inicia streaming IMEDIATAMENTE
     setStreaming(true);
-    setStreamingContent("🔄 Processando..."); // Indicador simples
+    setStreamingContent("🔍 Analisando..."); // Mostra que está processando
     
     // Força atualização visual imediata
     requestAnimationFrame(() => {
@@ -588,6 +594,7 @@ export function ChatInterface({
             hasContent: !!data.content,
             contentLength: data.content?.length || 0,
             sessionId: data.session_id,
+            tool: data.tool, // Log da ferramenta se houver
           });
           switch (data.type) {
             case "session_migrated":
@@ -627,6 +634,26 @@ export function ChatInterface({
             case "processing":
               // Inicia polling em tempo real quando começar o processamento
               console.log('🎯 Processamento iniciado - aguardando respostas em tempo real');
+              // Se tiver informação de ferramenta no processing
+              if (data.tool) {
+                const toolDisplay = {
+                  'Read': '📄 Lendo arquivo',
+                  'Write': '📝 Escrevendo arquivo',
+                  'Edit': '✏️ Editando arquivo',
+                  'MultiEdit': '🔄 Editando múltiplos trechos',
+                  'Bash': '🖥️ Executando comando',
+                  'Task': '🤖 Executando tarefa',
+                  'Grep': '🔍 Buscando no código',
+                  'Glob': '📁 Procurando arquivos',
+                  'WebSearch': '🌐 Pesquisando na web',
+                  'WebFetch': '🌎 Acessando URL',
+                  'TodoWrite': '✅ Atualizando lista de tarefas',
+                  'NotebookEdit': '📓 Editando notebook',
+                  'BashOutput': '📋 Verificando saída',
+                  'KillBash': '⏹️ Encerrando processo'
+                }[data.tool] || `🔧 ${data.tool}`;
+                setStreamingContent(toolDisplay);
+              }
               break;
 
             case "text_chunk":
@@ -669,11 +696,28 @@ export function ChatInterface({
             case "tool_use":
               if (data.tool) {
                 tools.push(data.tool);
-                const toolMsg = `\n📦 Usando ferramenta: ${data.tool}\n`;
-                // Exibe imediatamente sem animação
-                appendStreamingContent(toolMsg);
-                currentContent += toolMsg;
-                console.log(`Usando ferramenta: ${data.tool}`);
+                
+                // Mapeia nomes de ferramentas para ícones e descrições
+                const toolDisplay = {
+                  'Read': '📄 Lendo arquivo',
+                  'Write': '📝 Escrevendo arquivo',
+                  'Edit': '✏️ Editando arquivo',
+                  'MultiEdit': '🔄 Editando múltiplos trechos',
+                  'Bash': '🖥️ Executando comando',
+                  'Task': '🤖 Executando tarefa',
+                  'Grep': '🔍 Buscando no código',
+                  'Glob': '📁 Procurando arquivos',
+                  'WebSearch': '🌐 Pesquisando na web',
+                  'WebFetch': '🌎 Acessando URL',
+                  'TodoWrite': '✅ Atualizando lista de tarefas',
+                  'NotebookEdit': '📓 Editando notebook',
+                  'BashOutput': '📋 Verificando saída',
+                  'KillBash': '⏹️ Encerrando processo'
+                }[data.tool] || `🔧 ${data.tool}`;
+                
+                // Atualiza o conteúdo de streaming com a ferramenta atual
+                setStreamingContent(toolDisplay);
+                console.log(`🔧 FERRAMENTA DETECTADA: ${data.tool} -> ${toolDisplay}`);
               }
               break;
 
@@ -1105,7 +1149,7 @@ export function ChatInterface({
                       <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
                         <ChatMessage
                           role="assistant"
-                          content={streamingContent || "🔄 Aguardando resposta... (sem timeout)"}
+                          content={streamingContent || "🔍 Analisando..."}
                           isStreaming
                           sessionTitle={activeSession?.title}
                           sessionId={activeSession?.id}
