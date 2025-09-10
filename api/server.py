@@ -32,12 +32,14 @@ try:
     from session_routes import router as session_router
     from logging_routes import router as logging_router
     from projects_routes import router as projects_router
+    from metrics_routes import router as metrics_router
     ENHANCED_ROUTES_AVAILABLE = True
 except ImportError:
     ENHANCED_ROUTES_AVAILABLE = False
     session_router = None
     logging_router = None
     projects_router = None
+    metrics_router = None
 
 # Configuração de logging estruturado
 setup_logging(
@@ -374,6 +376,11 @@ if ENHANCED_ROUTES_AVAILABLE:
         app.include_router(projects_router)
         logger.info("✅ Rotas de projetos registradas",
                    extra={"event": "routes_registered", "component": "projects_routes"})
+    
+    if metrics_router:
+        app.include_router(metrics_router)
+        logger.info("✅ Rotas de métricas registradas",
+                   extra={"event": "routes_registered", "component": "metrics_routes"})
 session_manager = ClaudeCodeSessionManager()
 session_validator = SessionValidator()
 rate_limiter = RateLimitManager(redis_url=os.getenv("REDIS_URL"))

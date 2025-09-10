@@ -267,6 +267,12 @@ class EnhancedChatAPI {
       await this.createSession();
     }
 
+    // Iniciar timer de métrica
+    const timerId = await this.startMetricTimer('chat_message', this.sessionId || undefined);
+    
+    // Incrementar contador de mensagens
+    await this.incrementMetric('total_messages');
+
     // Log de início
     await this.sendLog({
       level: 'info',
@@ -331,6 +337,12 @@ class EnhancedChatAPI {
         }
       }
 
+      // Finalizar timer de métrica
+      const duration = await this.endMetricTimer(timerId!);
+      
+      // Incrementar contador de sucessos
+      await this.incrementMetric('successful_responses');
+
       // Log de conclusão
       await this.sendLog({
         level: 'info',
@@ -342,6 +354,12 @@ class EnhancedChatAPI {
 
       if (onComplete) onComplete();
     } catch (error: any) {
+      // Finalizar timer mesmo em caso de erro
+      await this.endMetricTimer(timerId!);
+      
+      // Incrementar contador de erros
+      await this.incrementMetric('error_responses');
+      
       // Log de erro
       await this.sendLog({
         level: 'error',
@@ -449,6 +467,131 @@ class EnhancedChatAPI {
     } catch (error) {
       console.error('❌ Erro ao obter sessões:', error);
       return { sessions: [] };
+    }
+  }
+
+  /**
+   * Inicia um timer de métrica
+   */
+  async startMetricTimer(operation: string, sessionId?: string) {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/metrics/timer/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          operation,
+          session_id: sessionId || this.sessionId || 'global'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao iniciar timer: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('⏱️ Timer iniciado:', data.timer_id);
+      return data.timer_id;
+    } catch (error) {
+      console.error('❌ Erro ao iniciar timer:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Finaliza um timer de métrica
+   */
+  async endMetricTimer(timerId: string) {
+    if (!timerId) return null;
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/metrics/timer/end`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ timer_id: timerId })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao finalizar timer: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('⏱️ Timer finalizado:', data.duration_ms, 'ms');
+      return data.duration_ms;
+    } catch (error) {
+      console.error('❌ Erro ao finalizar timer:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Incrementa contador de métrica
+   */
+  async incrementMetric(metric: string, value: number = 1) {
+    try {
+      await fetch(`${this.baseUrl}/api/metrics/increment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ metric, value })
+      });
+      console.log('📊 Métrica incrementada:', metric, '+', value);
+    } catch (error) {
+      console.error('❌ Erro ao incrementar métrica:', error);
+    }
+  }
+
+  /**
+   * Obtém estatísticas de operação
+   */
+  async getOperationStats(operation: string, sessionId?: string) {
+    try {
+      const url = sessionId 
+        ? `${this.baseUrl}/api/metrics/stats/${operation}?session_id=${sessionId}`
+        : `${this.baseUrl}/api/metrics/stats/${operation}`;
+        
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao obter estatísticas: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Erro ao obter estatísticas:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Obtém resumo de métricas
+   */
+  async getMetricsSummary() {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/metrics/summary`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao obter resumo: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('❌ Erro ao obter resumo de métricas:', error);
+      return null;
     }
   }
 }
