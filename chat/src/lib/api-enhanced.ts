@@ -5,10 +5,9 @@
 
 import { config } from './config';
 
-export interface AuthToken {
-  token: string;
+export interface SessionResponse {
   session_id: string;
-  expires_at: string;
+  created_at: string;
 }
 
 export interface SessionMetrics {
@@ -31,26 +30,23 @@ export interface LogEntry {
 
 class EnhancedChatAPI {
   private baseUrl: string;
-  private authToken: string | null = null;
   private sessionId: string | null = null;
 
   constructor(baseUrl?: string) {
     this.baseUrl = baseUrl || config.getApiUrl();
-    this.loadStoredAuth();
+    this.loadStoredSession();
   }
 
   /**
-   * Carrega autenticação armazenada (se existir)
+   * Carrega sessão armazenada (se existir)
    */
-  private loadStoredAuth() {
+  private loadStoredSession() {
     if (typeof window !== 'undefined') {
-      const storedAuth = localStorage.getItem('auth_token');
       const storedSession = localStorage.getItem('session_id');
       
-      if (storedAuth && storedSession) {
-        this.authToken = storedAuth;
+      if (storedSession) {
         this.sessionId = storedSession;
-        console.log('🔐 Autenticação restaurada');
+        console.log('📦 Sessão restaurada');
       }
     }
   }
@@ -59,7 +55,7 @@ class EnhancedChatAPI {
    * Cria nova sessão no servidor
    * Remove lógica de UUID fixo do frontend
    */
-  async createSession(projectPath?: string, metadata?: Record<string, any>): Promise<AuthToken> {
+  async createSession(projectPath?: string, metadata?: Record<string, any>): Promise<SessionResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/api/sessions/create`, {
         method: 'POST',
@@ -79,12 +75,10 @@ class EnhancedChatAPI {
 
       const data = await response.json();
       
-      // Salvar autenticação
-      this.authToken = data.token;
+      // Salvar sessão
       this.sessionId = data.session_id;
       
       if (typeof window !== 'undefined') {
-        localStorage.setItem('auth_token', data.token);
         localStorage.setItem('session_id', data.session_id);
       }
 
@@ -109,7 +103,7 @@ class EnhancedChatAPI {
    * Valida se sessão atual ainda é válida
    */
   async validateSession(): Promise<boolean> {
-    if (!this.authToken) {
+    if (!this.sessionId) {
       return false;
     }
 
@@ -117,8 +111,9 @@ class EnhancedChatAPI {
       const response = await fetch(`${this.baseUrl}/api/sessions/validate`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`
-        }
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ session_id: this.sessionId })
       });
 
       const data = await response.json();
@@ -134,8 +129,8 @@ class EnhancedChatAPI {
    * Não calcula localmente
    */
   async getSessionMetrics(): Promise<SessionMetrics | null> {
-    if (!this.authToken || !this.sessionId) {
-      console.warn('⚠️ Sem autenticação para obter métricas');
+    if (!this.sessionId) {
+      console.warn('⚠️ Sem sessão para obter métricas');
       return null;
     }
 
@@ -143,7 +138,7 @@ class EnhancedChatAPI {
       const response = await fetch(`${this.baseUrl}/api/sessions/${this.sessionId}/metrics`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`
+          'Content-Type': 'application/json'
         }
       });
 
@@ -162,8 +157,8 @@ class EnhancedChatAPI {
    * Obtém histórico da sessão do servidor
    */
   async getSessionHistory() {
-    if (!this.authToken || !this.sessionId) {
-      console.warn('⚠️ Sem autenticação para obter histórico');
+    if (!this.sessionId) {
+      console.warn('⚠️ Sem sessão para obter histórico');
       return null;
     }
 
@@ -171,7 +166,7 @@ class EnhancedChatAPI {
       const response = await fetch(`${this.baseUrl}/api/sessions/${this.sessionId}/history`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`
+          'Content-Type': 'application/json'
         }
       });
 
@@ -196,7 +191,6 @@ class EnhancedChatAPI {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` })
         },
         body: JSON.stringify(entry)
       });
@@ -220,7 +214,6 @@ class EnhancedChatAPI {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` })
         },
         body: JSON.stringify(filters)
       });
@@ -244,7 +237,6 @@ class EnhancedChatAPI {
       const response = await fetch(`${this.baseUrl}/api/logs/stats?hours=${hours}`, {
         method: 'GET',
         headers: {
-          ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` })
         }
       });
 
@@ -291,7 +283,6 @@ class EnhancedChatAPI {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'text/event-stream',
-          ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` })
         },
         body: JSON.stringify({
           message,
@@ -373,14 +364,14 @@ class EnhancedChatAPI {
     costUsd: number,
     responseTime: number
   ) {
-    if (!this.authToken || !this.sessionId) return;
+    if (!this.sessionId) return;
 
     try {
       await fetch(`${this.baseUrl}/api/sessions/${this.sessionId}/update-metrics`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.authToken}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           tokens_input: tokensInput,
@@ -399,22 +390,20 @@ class EnhancedChatAPI {
    * Limpa sessão no servidor
    */
   async clearSession() {
-    if (!this.authToken || !this.sessionId) return;
+    if (!this.sessionId) return;
 
     try {
       await fetch(`${this.baseUrl}/api/sessions/${this.sessionId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${this.authToken}`
+          'Content-Type': 'application/json'
         }
       });
 
       // Limpar local
-      this.authToken = null;
       this.sessionId = null;
       
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth_token');
         localStorage.removeItem('session_id');
       }
 
@@ -449,7 +438,6 @@ class EnhancedChatAPI {
       const response = await fetch(`${this.baseUrl}/api/sessions/user/${userId}/sessions`, {
         method: 'GET',
         headers: {
-          ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` })
         }
       });
 
