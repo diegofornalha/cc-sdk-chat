@@ -22,7 +22,7 @@ from middleware.exception_middleware import handle_errors
 from core.session_manager import ClaudeCodeSessionManager
 
 # Adiciona o diretório do SDK ao path  
-sdk_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'claude-code-sdk-python')
+sdk_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sdk')
 sys.path.insert(0, sdk_dir)
 
 from claude_code_sdk import (
