@@ -21,6 +21,7 @@ from ._errors import (
 )
 from ._internal.transport import Transport
 from .client import ClaudeSDKClient
+from .extended_client import ExtendedClaudeClient
 from .query import query
 from .types import (
     AssistantMessage,
@@ -46,6 +47,16 @@ from .types import (
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
+)
+from .utils import (
+    CallbackManager,
+    ConversationMemory,
+    InputValidator,
+    MetricsCollector,
+    ResponseFormatter,
+    RetryConfig,
+    RetryStrategy,
+    with_retry,
 )
 
 # MCP Server Support

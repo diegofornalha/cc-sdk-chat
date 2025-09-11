@@ -6,10 +6,11 @@ import { SessionTabs } from "../session/SessionTabs";
 import { ChatErrorBoundary } from "../error/ChatErrorBoundary";
 import SessionErrorBoundary from "../error/SessionErrorBoundary";
 import { NetworkMonitor } from "../debug/NetworkMonitor";
+import { HistoryPanel } from "../history/HistoryPanel";
 import { useSessionRecovery } from "@/hooks/useSessionRecovery";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
-import { Settings, Download, RefreshCw, Trash2, Bot, Clock, DollarSign, Activity, ArrowDown } from "lucide-react";
+import { Settings, Download, RefreshCw, Trash2, Bot, Clock, DollarSign, Activity, ArrowDown, History } from "lucide-react";
 import useChatStore, { SessionConfig } from "@/stores/chatStore";
 import ChatAPI from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -55,8 +56,10 @@ export function ChatInterface({
   const [isTyping, setIsTyping] = React.useState(false);
   const [isUserScrolling, setIsUserScrolling] = React.useState(false);
   const [autoScrollEnabled, setAutoScrollEnabled] = React.useState(true);
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const messagesContainerRef = React.useRef<HTMLDivElement>(null);
+  const messageInputRef = React.useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const typingQueueRef = React.useRef<string[]>([]);
   const scrollTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -1053,6 +1056,16 @@ export function ChatInterface({
             <Button
               variant="ghost"
               size="icon"
+              onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+              className={isHistoryOpen ? 'bg-gray-100' : ''}
+              title="Histórico e Métricas"
+            >
+              <History className="h-5 w-5" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={handleExportSession}
               disabled={!activeSession}
               title="Exportar sessão"
@@ -1281,6 +1294,21 @@ export function ChatInterface({
           </div>
         </ChatErrorBoundary>
       </div>
+
+      {/* History Panel */}
+      {activeSession && (
+        <HistoryPanel
+          sessionId={activeSession.id}
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          onMessageReplay={(content) => {
+            // Adiciona a mensagem do histórico no input
+            if (messageInputRef.current) {
+              messageInputRef.current.value = content;
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

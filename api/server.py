@@ -34,6 +34,7 @@ try:
     from routes.projects_routes import router as projects_router
     from routes.metrics_routes import router as metrics_router
     from routes.realtime_routes import router as realtime_router
+    from routes.history_routes import router as history_router
     ENHANCED_ROUTES_AVAILABLE = True
 except ImportError:
     ENHANCED_ROUTES_AVAILABLE = False
@@ -42,6 +43,7 @@ except ImportError:
     projects_router = None
     metrics_router = None
     realtime_router = None
+    history_router = None
 
 # Configuração de logging estruturado
 setup_logging(
@@ -388,6 +390,12 @@ if ENHANCED_ROUTES_AVAILABLE:
         app.include_router(realtime_router)
         logger.info("✅ Rotas de realtime registradas",
                    extra={"event": "routes_registered", "component": "realtime_routes"})
+    
+    if history_router:
+        app.include_router(history_router)
+        logger.info("✅ Rotas de histórico registradas",
+                   extra={"event": "routes_registered", "component": "history_routes"})
+
 session_manager = ClaudeCodeSessionManager()
 session_validator = SessionValidator()
 rate_limiter = RateLimitManager(redis_url=os.getenv("REDIS_URL"))

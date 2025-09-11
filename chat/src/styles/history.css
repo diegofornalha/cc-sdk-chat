@@ -1,0 +1,42 @@
+/* Animações para o painel de histórico */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+/* Scrollbar customizada para o histórico */
+.history-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.history-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.history-scrollbar::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.history-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Line clamp para mensagens truncadas */
+.line-clamp-3 {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}

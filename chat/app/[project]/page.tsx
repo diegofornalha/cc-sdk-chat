@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { config } from '@/lib/config';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,8 @@ export default function ProjectDashboardPage() {
   const [unifiedMessages, setUnifiedMessages] = useState<any[]>([]);
   const [deletingMessages, setDeletingMessages] = useState<Set<string>>(new Set()); // Rastreia mensagens sendo deletadas
   const [copiedSessions, setCopiedSessions] = useState<Set<string>>(new Set()); // Rastreia sessões copiadas
+  const [isDeletingSession, setIsDeletingSession] = useState<string | null>(null); // Rastreia sessão sendo limpa
+  const shouldStopDeletingRef = useRef(false); // Usa ref para garantir que o valor seja acessível no loop
   
   const { 
     sessions, 
@@ -290,6 +292,13 @@ export default function ProjectDashboardPage() {
   const totalStats = calculateTotalStats();
   
   const handleDeleteMessage = async (sessionId: string, messageIndex: number) => {
+    // Validação de índice
+    const session = projectSessions.find(s => s.id === sessionId);
+    if (!session || !session.messages || messageIndex < 0 || messageIndex >= session.messages.length) {
+      console.error(`❌ Índice inválido: ${messageIndex} (total de mensagens: ${session?.messages?.length || 0})`);
+      return;
+    }
+    
     const messageKey = `${sessionId}-${messageIndex}`;
     
     try {
@@ -299,17 +308,19 @@ export default function ProjectDashboardPage() {
       // Aguarda um pouco para a animação
       await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Remove da UI após animação
+      // Remove da UI após animação (otimistic update)
       setProjectSessions(prevSessions => 
         prevSessions.map(session => {
           if (session.id === sessionId) {
             const updatedMessages = [...session.messages];
-            updatedMessages.splice(messageIndex, 1);
-            return {
-              ...session,
-              messages: updatedMessages,
-              total_messages: updatedMessages.length
-            };
+            if (messageIndex >= 0 && messageIndex < updatedMessages.length) {
+              updatedMessages.splice(messageIndex, 1);
+              return {
+                ...session,
+                messages: updatedMessages,
+                total_messages: updatedMessages.length
+              };
+            }
           }
           return session;
         })
@@ -336,8 +347,7 @@ export default function ProjectDashboardPage() {
       
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ Mensagem deletada:', result);
-        console.log('🗑️ Mensagem removida com sucesso!');
+        console.log(`✅ Mensagem ${messageIndex} deletada da sessão ${sessionId.slice(-8)}`);
         
         // Atualiza também as mensagens unificadas
         if (unifiedMessages.length > 0) {
@@ -364,9 +374,25 @@ export default function ProjectDashboardPage() {
           return newSet;
         });
         await loadProjectData();
-        const error = await response.json();
-        console.error('❌ Erro ao deletar mensagem:', error);
-        alert('Erro ao deletar mensagem: ' + error.error);
+        
+        // Tenta obter informações do erro
+        let errorMessage = `Status: ${response.status}`;
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorData.message || JSON.stringify(errorData);
+          } else {
+            const textError = await response.text();
+            if (textError) {
+              errorMessage = textError;
+            }
+          }
+        } catch (parseError) {
+          console.error('Erro ao processar resposta de erro:', parseError);
+        }
+        
+        console.error(`❌ Falha ao deletar no backend: ${errorMessage}`);
       }
     } catch (error) {
       // Se falhar, reverte a mudança otimista
@@ -376,8 +402,7 @@ export default function ProjectDashboardPage() {
         return newSet;
       });
       await loadProjectData();
-      console.error('❌ Erro ao deletar mensagem:', error);
-      alert('Erro ao deletar mensagem');
+      console.error('❌ Erro de conexão ao deletar mensagem:', error);
     }
   };
 
@@ -391,19 +416,58 @@ export default function ProjectDashboardPage() {
         return;
       }
       
-      console.log(`🧹 Limpando ${session.messages.length} mensagens da sessão ${sessionId}`);
+      // Define que está deletando esta sessão e reseta flag de interrupção
+      setIsDeletingSession(sessionId);
+      shouldStopDeletingRef.current = false;
       
-      // Deleta todas as mensagens de trás para frente
-      for (let i = session.messages.length - 1; i >= 0; i--) {
-        await handleDeleteMessage(sessionId, i);
+      const totalMessages = session.messages.length;
+      console.log(`🧹 Iniciando limpeza de ${totalMessages} mensagens da sessão ${sessionId.slice(-8)}`);
+      
+      // Deleta sempre a primeira mensagem (índice 0) até não haver mais
+      let deletedCount = 0;
+      let remainingMessages = totalMessages;
+      
+      while (remainingMessages > 0) {
+        // Verifica se deve parar usando a ref
+        if (shouldStopDeletingRef.current) {
+          console.log(`⏹️ Exclusão interrompida: ${deletedCount}/${totalMessages} mensagens deletadas`);
+          break;
+        }
+        
+        // Busca sessão atualizada a cada iteração
+        const currentSession = projectSessions.find(s => s.id === sessionId);
+        if (!currentSession || !currentSession.messages || currentSession.messages.length === 0) {
+          console.log(`✅ Todas as mensagens foram deletadas (${deletedCount}/${totalMessages})`);
+          break;
+        }
+        
+        // Sempre deleta a primeira mensagem (índice 0)
+        // Isso evita problemas de índice pois sempre existirá um índice 0 se houver mensagens
+        await handleDeleteMessage(sessionId, 0);
+        deletedCount++;
+        remainingMessages = currentSession.messages.length - 1; // Atualiza contagem baseada no estado atual
+        
+        console.log(`📊 Progresso: ${deletedCount}/${totalMessages} mensagens deletadas (${remainingMessages} restantes)`);
+        
         // Pequeno delay entre deleções para não sobrecarregar
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
       
-      console.log('✅ Sessão limpa com sucesso');
+      if (!shouldStopDeletingRef.current && deletedCount === totalMessages) {
+        console.log(`✅ Sessão limpa completamente: ${deletedCount} mensagens deletadas`);
+      }
     } catch (error) {
-      console.error('Erro ao limpar sessão:', error);
+      console.error('❌ Erro ao limpar sessão:', error);
+    } finally {
+      setIsDeletingSession(null);
+      shouldStopDeletingRef.current = false;
     }
+  };
+  
+  // Função para interromper a exclusão
+  const handleStopDeleting = () => {
+    shouldStopDeletingRef.current = true;
+    console.log('🛑 Solicitando interrupção da exclusão...');
   };
   
   // Função para copiar todas as conversas
@@ -758,7 +822,15 @@ export default function ProjectDashboardPage() {
                       <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <div className="text-muted-foreground">Mensagens</div>
-                          <div className="font-medium">{session.total_messages}</div>
+                          <div className="font-medium">
+                            {isDeletingSession === session.id ? (
+                              <span className="text-orange-500 animate-pulse">
+                                Excluindo... {session.messages.length}
+                              </span>
+                            ) : (
+                              session.total_messages
+                            )}
+                          </div>
                         </div>
                         <div>
                           <div className="text-muted-foreground">Tokens</div>
@@ -807,15 +879,26 @@ export default function ProjectDashboardPage() {
                         )}
                       </Button>
                       
-                      <Button 
-                        className="w-full mt-2" 
-                        variant="destructive"
-                        onClick={() => handleClearSession(session.id)}
-                        disabled={session.messages.length === 0}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Limpar Tudo
-                      </Button>
+                      {isDeletingSession === session.id ? (
+                        <Button 
+                          className="w-full mt-2" 
+                          variant="outline"
+                          onClick={handleStopDeleting}
+                        >
+                          <AlertCircle className="mr-2 h-4 w-4 animate-pulse" />
+                          Interromper Exclusão
+                        </Button>
+                      ) : (
+                        <Button 
+                          className="w-full mt-2" 
+                          variant="destructive"
+                          onClick={() => handleClearSession(session.id)}
+                          disabled={session.messages.length === 0 || isDeletingSession !== null}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Limpar Tudo
+                        </Button>
+                      )}
                     </div>
                   </div>
 
