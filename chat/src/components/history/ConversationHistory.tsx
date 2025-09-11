@@ -39,7 +39,9 @@ export function ConversationHistory({ sessionId, onMessageClick, className = '' 
   const loadHistory = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/history/session/${sessionId}?limit=100`);
+      const { config } = await import('@/lib/config');
+      const apiUrl = config.getApiUrl();
+      const response = await fetch(`${apiUrl}/api/history/session/${sessionId}?limit=100`);
       if (response.ok) {
         const data = await response.json();
         setMessages(data);
@@ -53,7 +55,9 @@ export function ConversationHistory({ sessionId, onMessageClick, className = '' 
 
   const saveHistory = async () => {
     try {
-      await fetch(`/api/history/session/${sessionId}/save`, { method: 'POST' });
+      const { config } = await import('@/lib/config');
+      const apiUrl = config.getApiUrl();
+      await fetch(`${apiUrl}/api/history/session/${sessionId}/save`, { method: 'POST' });
       alert('Histórico salvo com sucesso!');
     } catch (error) {
       console.error('Failed to save history:', error);
@@ -65,7 +69,9 @@ export function ConversationHistory({ sessionId, onMessageClick, className = '' 
     if (!confirm('Tem certeza que deseja limpar o histórico desta sessão?')) return;
     
     try {
-      await fetch(`/api/history/session/${sessionId}`, { method: 'DELETE' });
+      const { config } = await import('@/lib/config');
+      const apiUrl = config.getApiUrl();
+      await fetch(`${apiUrl}/api/history/session/${sessionId}`, { method: 'DELETE' });
       setMessages([]);
       alert('Histórico limpo com sucesso!');
     } catch (error) {

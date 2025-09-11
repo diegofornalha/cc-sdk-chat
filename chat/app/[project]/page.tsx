@@ -47,6 +47,7 @@ export default function ProjectDashboardPage() {
   const searchParams = useSearchParams();
   const [projectSessions, setProjectSessions] = useState<ProjectSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>(''); // Será definido após carregar sessões
   const [unifiedMessages, setUnifiedMessages] = useState<any[]>([]);
   const [deletingMessages, setDeletingMessages] = useState<Set<string>>(new Set()); // Rastreia mensagens sendo deletadas
@@ -72,16 +73,37 @@ export default function ProjectDashboardPage() {
   const loadProjectData = async () => {
     try {
       setIsLoading(true);
+      setError(null);
       console.log('🔍 Carregando projeto:', projectName);
       
-      // Carrega sessões do projeto
-      const apiBaseUrl = config.getApiUrl();
-      const url = `${apiBaseUrl}/api/analytics/projects/${projectName}/sessions`;
+      // Carrega sessões do projeto - usa a rota local da API
+      const url = `/api/projects/${projectName}/sessions`;
       console.log('📡 Buscando sessões em:', url);
-      const response = await fetch(url);
+      
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          // Adiciona timeout de 10 segundos
+          signal: AbortSignal.timeout(10000)
+        });
+      } catch (fetchError) {
+        console.error('❌ Erro de conexão:', fetchError);
+        console.log('💡 Verifique se o servidor backend está rodando na porta', config.getApiPort());
+        console.log('📍 URL tentada:', url);
+        
+        // Se for erro de conexão, mostra mensagem mais clara
+        if (fetchError instanceof TypeError && fetchError.message === 'Failed to fetch') {
+          throw new Error(`Não foi possível conectar ao servidor. Verifique se o backend está rodando em ${apiBaseUrl || 'localhost:' + config.getApiPort()}`);
+        }
+        throw fetchError;
+      }
 
       if (!response.ok) {
-        throw new Error('Erro ao carregar dados do projeto');
+        throw new Error(`Erro ao carregar dados do projeto: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -206,6 +228,13 @@ export default function ProjectDashboardPage() {
     } catch (error) {
       console.error('❌ Erro ao carregar projeto:', error);
       console.error('Stack:', error instanceof Error ? error.stack : 'N/A');
+      
+      // Define mensagem de erro amigável
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('Erro desconhecido ao carregar o projeto');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -272,6 +301,30 @@ export default function ProjectDashboardPage() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="mb-4">
+            <svg className="w-12 h-12 text-destructive mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold mb-2">Erro ao carregar projeto</h2>
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <div className="space-y-2">
+            <Button onClick={() => loadProjectData()} className="w-full">
+              Tentar novamente
+            </Button>
+            <Button variant="outline" onClick={() => router.push('/')} className="w-full">
+              Voltar ao início
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (projectSessions.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -294,8 +347,20 @@ export default function ProjectDashboardPage() {
   const handleDeleteMessage = async (sessionId: string, messageIndex: number) => {
     // Validação de índice
     const session = projectSessions.find(s => s.id === sessionId);
-    if (!session || !session.messages || messageIndex < 0 || messageIndex >= session.messages.length) {
-      console.error(`❌ Índice inválido: ${messageIndex} (total de mensagens: ${session?.messages?.length || 0})`);
+    
+    // Validação detalhada
+    if (!session) {
+      console.error(`❌ Sessão não encontrada: ${sessionId}`);
+      return;
+    }
+    
+    if (!session.messages || session.messages.length === 0) {
+      console.log(`⚠️ Sessão sem mensagens: ${sessionId}`);
+      return;
+    }
+    
+    if (messageIndex < 0 || messageIndex >= session.messages.length) {
+      console.error(`❌ Índice inválido: ${messageIndex} (total de mensagens: ${session.messages.length})`);
       return;
     }
     
@@ -425,9 +490,8 @@ export default function ProjectDashboardPage() {
       
       // Deleta sempre a primeira mensagem (índice 0) até não haver mais
       let deletedCount = 0;
-      let remainingMessages = totalMessages;
       
-      while (remainingMessages > 0) {
+      while (deletedCount < totalMessages) {
         // Verifica se deve parar usando a ref
         if (shouldStopDeletingRef.current) {
           console.log(`⏹️ Exclusão interrompida: ${deletedCount}/${totalMessages} mensagens deletadas`);
@@ -436,18 +500,26 @@ export default function ProjectDashboardPage() {
         
         // Busca sessão atualizada a cada iteração
         const currentSession = projectSessions.find(s => s.id === sessionId);
+        
+        // Verifica se ainda há mensagens para deletar
         if (!currentSession || !currentSession.messages || currentSession.messages.length === 0) {
-          console.log(`✅ Todas as mensagens foram deletadas (${deletedCount}/${totalMessages})`);
+          console.log(`✅ Sessão limpa: ${deletedCount} mensagens deletadas`);
           break;
         }
         
-        // Sempre deleta a primeira mensagem (índice 0)
-        // Isso evita problemas de índice pois sempre existirá um índice 0 se houver mensagens
-        await handleDeleteMessage(sessionId, 0);
-        deletedCount++;
-        remainingMessages = currentSession.messages.length - 1; // Atualiza contagem baseada no estado atual
+        // Log do estado atual
+        console.log(`📋 Deletando mensagem 1 de ${currentSession.messages.length} restantes`);
         
-        console.log(`📊 Progresso: ${deletedCount}/${totalMessages} mensagens deletadas (${remainingMessages} restantes)`);
+        // Sempre deleta a primeira mensagem (índice 0)
+        // Mas só se realmente houver mensagens
+        if (currentSession.messages.length > 0) {
+          await handleDeleteMessage(sessionId, 0);
+          deletedCount++;
+          console.log(`📊 Progresso: ${deletedCount}/${totalMessages} mensagens deletadas`);
+        } else {
+          console.log(`⚠️ Não há mais mensagens para deletar`);
+          break;
+        }
         
         // Pequeno delay entre deleções para não sobrecarregar
         await new Promise(resolve => setTimeout(resolve, 150));

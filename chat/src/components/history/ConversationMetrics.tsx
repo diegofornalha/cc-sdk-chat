@@ -35,15 +35,19 @@ export function ConversationMetrics({ sessionId, className = '' }: ConversationM
   const loadMetrics = async () => {
     setLoading(true);
     try {
+      // Importar configuração
+      const { config } = await import('@/lib/config');
+      const apiUrl = config.getApiUrl();
+      
       // Carregar métricas globais
-      const metricsResponse = await fetch('/api/history/metrics/global');
+      const metricsResponse = await fetch(`${apiUrl}/api/history/metrics/global`);
       if (metricsResponse.ok) {
         const metricsData = await metricsResponse.json();
         setMetrics(metricsData);
       }
 
       // Carregar análise de tópicos
-      const topicsResponse = await fetch('/api/history/analytics/topics');
+      const topicsResponse = await fetch(`${apiUrl}/api/history/analytics/topics`);
       if (topicsResponse.ok) {
         const topicsData = await topicsResponse.json();
         setTopics(topicsData);

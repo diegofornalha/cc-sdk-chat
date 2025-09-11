@@ -16,7 +16,7 @@ sys.path.append('/Users/2a/.claude/cc-sdk-chat/api/sdk')
 from claude_code_sdk import ExtendedClaudeClient
 
 router = APIRouter(
-    prefix="/history",
+    prefix="/api/history",
     tags=["history"],
     responses={404: {"description": "Not found"}},
 )

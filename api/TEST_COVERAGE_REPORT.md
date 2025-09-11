@@ -2,12 +2,12 @@
 
 ## 🚨 **Resumo Executivo**
 
-**COBERTURA ATUAL: 6.2%** (Crítico - Muito Baixa)
+**COBERTURA ATUAL: 5.3%** (Crítico - Muito Baixa)
 
-- **32 endpoints** totais na API
+- **38 endpoints** totais na API (32 + 6 histórico)
 - **Apenas 2 endpoints** com testes
 - **10 testes** executáveis
-- **4 módulos de rotas** sem nenhum teste
+- **5 módulos de rotas** sem nenhum teste
 
 ## ❌ **Problemas Críticos**
 
@@ -23,6 +23,7 @@
 | projects_routes | 6 | 0 | ❌ Sem testes |
 | metrics_routes | 7 | 0 | ❌ Sem testes |
 | realtime_routes | 2 | 0 | ❌ Sem testes |
+| history_routes | 6 | 0 | ❌ Sem testes |
 | logging_routes | 8 | 7* | ⚠️ Testes parciais |
 
 *Testes de logging testam funções internas, não endpoints HTTP
@@ -33,17 +34,32 @@
 - ❌ Sem testes de integração
 - ❌ Sem CI/CD configurado
 - ❌ Sem testes de carga/performance
+- ❌ Sem testes para histórico de conversação
 
 ## 📈 **Estatísticas Detalhadas**
 
 ```
-Total de Endpoints:        32
+Total de Endpoints:        32 (+6 histórico)
 Endpoints Testados:         2
-Cobertura de Endpoints:   6.2%
+Cobertura de Endpoints:   5.3% (2/38)
 Arquivos de Teste:          6
 Funções de Teste:          12
 Testes Executáveis:        10
 ```
+
+### 📚 **Histórico de Conversação (Implementado sem Testes)**
+
+**Backend - Endpoints Adicionados:**
+- `POST /api/history/save` - Salvar histórico de sessão
+- `GET /api/history/{session_id}` - Carregar histórico
+- `GET /api/history/search` - Buscar mensagens
+- `GET /api/history/topics` - Análise de tópicos
+- `GET /api/history/metrics` - Métricas globais
+- `GET /api/history/timeline` - Timeline de uso
+
+**Arquivos Criados:**
+- `/api/routes/history_routes.py` - ❌ Sem testes
+- `/api/examples/conversation_history_example.py` - Exemplo de uso
 
 ## 🎯 **Top 5 Endpoints Críticos Sem Testes**
 
@@ -62,7 +78,8 @@ tests/
 ├── conftest.py          # Fixtures compartilhadas
 ├── test_sessions.py     # 9 endpoints de sessão
 ├── test_realtime.py     # 2 endpoints de streaming
-└── test_projects.py     # 6 endpoints de projetos
+├── test_projects.py     # 6 endpoints de projetos
+└── test_history.py      # 6 endpoints de histórico
 ```
 
 ### Fase 2: Mocks e Integração (2-3 dias)
@@ -94,6 +111,7 @@ python tests/coverage_analysis.py
 - [ ] Implementar `test_sessions.py` (9 testes)
 - [ ] Implementar `test_realtime.py` (2 testes)
 - [ ] Implementar `test_projects.py` (6 testes)
+- [ ] Implementar `test_history.py` (6 testes)
 - [ ] Adicionar mock do Claude SDK
 - [ ] Configurar GitHub Actions
 - [ ] Atingir 50% de cobertura (mínimo)
