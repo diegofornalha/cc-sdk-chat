@@ -57,6 +57,8 @@ export default function SessionViewerPage() {
 
   useEffect(() => {
     if (params && params.project && params.sessionId) {
+      let intervalId: NodeJS.Timeout;
+      
       const loadSession = async () => {
         const realSessionId = await resolveSessionId(
           params.sessionId as string, 
@@ -92,7 +94,20 @@ export default function SessionViewerPage() {
           });
       };
 
+      // Carrega primeira vez
       loadSession();
+      
+      // Configura polling para atualização em tempo real (a cada 1 segundo)
+      intervalId = setInterval(() => {
+        loadSession();
+      }, 1000);
+
+      // Cleanup do interval quando o componente desmontar ou params mudarem
+      return () => {
+        if (intervalId) {
+          clearInterval(intervalId);
+        }
+      };
     }
   }, [params?.project, params?.sessionId]);
 
