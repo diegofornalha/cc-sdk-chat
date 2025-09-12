@@ -17,7 +17,7 @@ export interface ChatMessage {
 
 export interface StreamResponse {
   type: 'text_chunk' | 'assistant_text' | 'tool_use' | 'tool_result' | 'result' | 'error' | 'done' | 'processing' | 'session_migrated';
-  content?: string;
+  content?: string | any; // Permitir qualquer tipo pois o backend pode enviar objetos
   tool?: string;
   id?: string;
   tool_id?: string;
@@ -135,7 +135,11 @@ class ChatAPI {
               const messageTime = new Date(lastAssistant.timestamp).getTime();
               
               if (lastAssistant.timestamp !== lastAssistantTimestamp && messageTime > pollStartTime) {
-                console.log('🆕 Nova resposta do assistant:', lastAssistant.content.substring(0, 50));
+                console.log('🆕 Nova resposta do assistant:', 
+                  typeof lastAssistant.content === 'string' ? 
+                    lastAssistant.content.substring(0, 50) : 
+                    JSON.stringify(lastAssistant.content).substring(0, 50)
+                );
                 lastAssistantTimestamp = lastAssistant.timestamp;
                 onNewMessage(lastAssistant);
               }
@@ -243,7 +247,11 @@ class ChatAPI {
               console.log('📨 SSE data received:', {
                 type: data.type,
                 sessionId: data.session_id,
-                content: data.content ? data.content.substring(0, 50) : undefined,
+                content: data.content ? 
+                  (typeof data.content === 'string' ? 
+                    data.content.substring(0, 50) : 
+                    JSON.stringify(data.content).substring(0, 50)
+                  ) : undefined,
                 timestamp: new Date().toISOString()
               });
               
