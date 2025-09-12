@@ -36,7 +36,7 @@ export interface SessionConfig {
   systemPrompt?: string
   allowedTools?: string[]
   maxTurns?: number
-  permissionMode?: 'acceptEdits' | 'ask' | 'deny'
+  permissionMode?: 'bypassPermissions' | 'acceptEdits' | 'ask' | 'deny'
   cwd?: string
 }
 
@@ -44,7 +44,7 @@ const defaultSessionConfig: SessionConfig = {
   systemPrompt: '',
   allowedTools: [],
   maxTurns: 20,
-  permissionMode: 'acceptEdits',
+  permissionMode: 'bypassPermissions',
   cwd: undefined
 }
 
@@ -224,7 +224,7 @@ const useChatStore = create<ChatStore>()(
                 systemPrompt: 'Sessão restaurada do Claude Code',
                 allowedTools: [],
                 maxTurns: 20,
-                permissionMode: 'acceptEdits',
+                permissionMode: 'bypassPermissions',
                 cwd: undefined
               },
               metrics: {
@@ -393,7 +393,7 @@ const useChatStore = create<ChatStore>()(
             systemPrompt: 'Sessão restaurada do Claude Code',
             allowedTools: [],
             maxTurns: 20,
-            permissionMode: 'acceptEdits',
+            permissionMode: 'bypassPermissions',
             cwd: undefined
           },
           metrics: {
@@ -463,7 +463,7 @@ const useChatStore = create<ChatStore>()(
               systemPrompt: `Timeline unificada do projeto - ${sessions.length} sessões combinadas`,
               allowedTools: [],
               maxTurns: 100,
-              permissionMode: 'acceptEdits',
+              permissionMode: 'bypassPermissions',
               cwd: sessions[0]?.cwd
             },
             metrics: {
@@ -494,7 +494,7 @@ const useChatStore = create<ChatStore>()(
                   systemPrompt: `Sessão individual - ${sessionData.origin || 'Claude Code'}`,
                   allowedTools: [],
                   maxTurns: 20,
-                  permissionMode: 'acceptEdits',
+                  permissionMode: 'bypassPermissions',
                   cwd: sessionData.cwd
                 },
                 metrics: {

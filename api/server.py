@@ -27,6 +27,9 @@ from middleware.rate_limiter import RateLimitManager
 from monitoring.stability_monitor import stability_monitor, CircuitBreakerConfig, CircuitState
 from monitoring.fallback_system import fallback_system, FallbackConfig, FallbackStrategy
 
+# Importar gerenciador do monitor de sessões
+from core.monitor_manager import init_monitor_manager, get_monitor_manager
+
 # Importar novas rotas
 try:
     from routes.session_routes import router as session_router
@@ -35,6 +38,7 @@ try:
     from routes.metrics_routes import router as metrics_router
     from routes.realtime_routes import router as realtime_router
     from routes.history_routes import router as history_router
+    from routes.monitor_health import router as monitor_router
     ENHANCED_ROUTES_AVAILABLE = True
 except ImportError:
     ENHANCED_ROUTES_AVAILABLE = False
@@ -44,6 +48,7 @@ except ImportError:
     metrics_router = None
     realtime_router = None
     history_router = None
+    monitor_router = None
 
 # Configuração de logging estruturado
 setup_logging(
@@ -115,6 +120,28 @@ async def lifespan(app: FastAPI):
     health_status['status'] = 'healthy'
     health_status['last_check'] = datetime.now().isoformat()
     
+    # Inicializa o monitor de sessões automaticamente
+    try:
+        logger.info(
+            "Iniciando Monitor de Sessões Unificadas...",
+            extra={"event": "monitor_startup", "component": "session_monitor"}
+        )
+        await init_monitor_manager()
+        logger.info(
+            "Monitor de Sessões iniciado com sucesso",
+            extra={"event": "monitor_started", "component": "session_monitor"}
+        )
+    except Exception as e:
+        logger.error(
+            f"Erro ao iniciar Monitor de Sessões: {e}",
+            extra={
+                "event": "monitor_startup_error",
+                "component": "session_monitor",
+                "error": str(e)
+            }
+        )
+        # Não falha a aplicação se o monitor não iniciar
+    
     # Inicializa handlers
     try:
         # Teste de conectividade com Claude SDK
@@ -167,6 +194,15 @@ async def lifespan(app: FastAPI):
         extra={"event": "app_shutdown_start", "component": "server"}
     )
     health_status['status'] = 'shutting_down'
+    
+    # Para o monitor de sessões
+    try:
+        logger.info("Parando Monitor de Sessões...")
+        monitor_manager = get_monitor_manager()
+        await monitor_manager.stop()
+        logger.info("Monitor de Sessões parado com sucesso")
+    except Exception as e:
+        logger.error(f"Erro ao parar Monitor de Sessões: {e}")
     
     # Encerra todas as sessões ativas
     try:
@@ -395,6 +431,11 @@ if ENHANCED_ROUTES_AVAILABLE:
         app.include_router(history_router)
         logger.info("✅ Rotas de histórico registradas",
                    extra={"event": "routes_registered", "component": "history_routes"})
+    
+    if monitor_router:
+        app.include_router(monitor_router)
+        logger.info("✅ Rotas de monitor registradas",
+                   extra={"event": "routes_registered", "component": "monitor_routes"})
 
 session_manager = ClaudeCodeSessionManager()
 session_validator = SessionValidator()

@@ -134,7 +134,7 @@ class SecureSessionConfigRequest(BaseModel):
         description="Número máximo de turnos (1-1000)"
     )
     permission_mode: str = Field(
-        'acceptEdits',
+        'bypassPermissions',
         description="Modo de permissão"
     )
     cwd: Optional[str] = Field(
@@ -180,7 +180,7 @@ class SecureSessionConfigRequest(BaseModel):
     @validator('permission_mode')
     def validate_permission_mode(cls, v):
         """Valida modo de permissão."""
-        allowed_modes = {'acceptEdits', 'rejectEdits', 'askUser'}
+        allowed_modes = {'acceptEdits', 'rejectEdits', 'askUser', 'bypassPermissions'}
         if v not in allowed_modes:
             raise ValueError(f'permission_mode deve ser um de: {allowed_modes}')
         return v

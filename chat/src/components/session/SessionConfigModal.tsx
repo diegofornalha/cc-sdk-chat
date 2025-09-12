@@ -99,7 +99,7 @@ export function SessionConfigModal({
       systemPrompt: '',
       allowedTools: [],
       maxTurns: 20,
-      permissionMode: 'acceptEdits',
+      permissionMode: 'bypassPermissions',
       cwd: ''
     }
   )
@@ -219,6 +219,14 @@ export function SessionConfigModal({
             <div className="space-y-2">
               <Label>Modo de Permissão</Label>
               <div className="flex gap-2">
+                <Button
+                  variant={config.permissionMode === 'bypassPermissions' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setConfig({ ...config, permissionMode: 'bypassPermissions' })}
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Bypass (Auto)
+                </Button>
                 <Button
                   variant={config.permissionMode === 'acceptEdits' ? 'default' : 'outline'}
                   size="sm"

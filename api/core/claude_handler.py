@@ -44,7 +44,7 @@ class SessionConfig:
     system_prompt: Optional[str] = None
     allowed_tools: List[str] = field(default_factory=list)
     max_turns: Optional[int] = None
-    permission_mode: str = 'acceptEdits'
+    permission_mode: str = 'bypassPermissions'
     cwd: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.now)
     
