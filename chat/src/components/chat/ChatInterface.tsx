@@ -1141,9 +1141,9 @@ export function ChatInterface({
                       </Card>
                     )}
 
-                    {activeSession?.messages.map((message) => (
+                    {activeSession?.messages.map((message, index) => (
                       <ChatMessage
-                        key={message.id}
+                        key={`${message.id}-${index}`}
                         role={message.role}
                         content={message.content}
                         timestamp={message.timestamp}
