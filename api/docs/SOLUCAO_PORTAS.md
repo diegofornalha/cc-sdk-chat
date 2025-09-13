@@ -72,7 +72,7 @@ except:
 ## 🔌 Problema 2: Configuração de Portas
 
 ### Diagnóstico
-- **Problema**: Portas hardcoded (`8992`, `8991`, `8990`) espalhadas pelo código
+- **Problema**: Portas hardcoded (`8992`, `8991`, `8991`) espalhadas pelo código
 - **Impacto**: Conflitos quando portas estavam em uso, difícil manutenção
 - **Sintoma**: `Failed to fetch` e `ERR_CONNECTION_REFUSED` no frontend
 
@@ -87,7 +87,7 @@ class ConfigManager {
 
   private loadConfig(): SystemConfig {
     // Carrega portas do ambiente ou usa padrões
-    const apiPort = parseInt(process.env.NEXT_PUBLIC_API_PORT || '8990');
+    const apiPort = parseInt(process.env.NEXT_PUBLIC_API_PORT || '8991');
     const apiHost = process.env.NEXT_PUBLIC_API_HOST || 'localhost';
     const frontendPort = parseInt(process.env.NEXT_PUBLIC_FRONTEND_PORT || '3082');
 
@@ -122,7 +122,7 @@ export const config = ConfigManager.getInstance();
 
 ```bash
 # Configuração das portas
-NEXT_PUBLIC_API_PORT=8990
+NEXT_PUBLIC_API_PORT=8991
 NEXT_PUBLIC_API_HOST=localhost
 NEXT_PUBLIC_FRONTEND_PORT=3082
 ```

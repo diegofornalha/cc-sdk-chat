@@ -14,7 +14,7 @@ Esta é uma solução **definitiva e robusta** para gerenciar as portas e config
 
 ### 2. **Variáveis de Ambiente** (`.env.local`)
 ```bash
-NEXT_PUBLIC_API_PORT=8990        # Porta da API
+NEXT_PUBLIC_API_PORT=8991        # Porta da API
 NEXT_PUBLIC_API_HOST=localhost   # Host da API
 NEXT_PUBLIC_FRONTEND_PORT=3082   # Porta do Frontend
 ```

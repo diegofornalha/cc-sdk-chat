@@ -15,7 +15,7 @@ if [ -f .env.local ]; then
     export $(cat .env.local | grep -v '^#' | xargs)
 fi
 
-API_PORT=${NEXT_PUBLIC_API_PORT:-8990}
+API_PORT=${NEXT_PUBLIC_API_PORT:-8991}
 FRONTEND_PORT=${NEXT_PUBLIC_FRONTEND_PORT:-3082}
 
 # Verifica API

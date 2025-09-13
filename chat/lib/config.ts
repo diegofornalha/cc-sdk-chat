@@ -38,7 +38,7 @@ class ConfigManager {
     const isProduction = process.env.NODE_ENV === 'production';
 
     // Carrega portas do ambiente ou usa padrões
-    const apiPort = parseInt(process.env.NEXT_PUBLIC_API_PORT || '8990');
+    const apiPort = parseInt(process.env.NEXT_PUBLIC_API_PORT || '8991');
     const apiHost = process.env.NEXT_PUBLIC_API_HOST || 'localhost';
     const frontendPort = parseInt(process.env.NEXT_PUBLIC_FRONTEND_PORT || '3082');
 

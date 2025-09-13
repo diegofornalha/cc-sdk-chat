@@ -20,7 +20,7 @@ if [ -f .env.local ]; then
 fi
 
 # Define portas padrão ou usa as do ambiente
-API_PORT=${NEXT_PUBLIC_API_PORT:-8990}
+API_PORT=${NEXT_PUBLIC_API_PORT:-8991}
 FRONTEND_PORT=${NEXT_PUBLIC_FRONTEND_PORT:-3082}
 
 # Função para verificar se porta está disponível

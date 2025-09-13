@@ -18,7 +18,7 @@ export function SystemStatus({ className }: SystemStatusProps) {
     try {
       const { config } = await import('@/lib/config');
       const apiUrl = config.getApiUrl();
-      const port = apiUrl.split(':').pop() || '8990';
+      const port = apiUrl.split(':').pop() || '8991';
       setApiPort(port);
       
       const response = await fetch(`${apiUrl}/`);
@@ -80,7 +80,7 @@ export function SystemStatus({ className }: SystemStatusProps) {
               <div>
                 <p className="font-medium">API Backend</p>
                 <p className="text-xs text-muted-foreground">
-                  http://localhost:{apiPort || '8990'}
+                  http://localhost:{apiPort || '8991'}
                 </p>
               </div>
             </div>
