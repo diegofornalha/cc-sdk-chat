@@ -27,8 +27,9 @@ from middleware.rate_limiter import RateLimitManager
 from monitoring.stability_monitor import stability_monitor, CircuitBreakerConfig, CircuitState
 from monitoring.fallback_system import fallback_system, FallbackConfig, FallbackStrategy
 
-# Importar gerenciador do monitor de sessões
-from core.monitor_manager import init_monitor_manager, get_monitor_manager
+# Importar gerenciador unificado de sessões
+from unified_session_manager import init_unified_manager, stop_unified_manager, get_unified_manager
+from web_session_manager import get_web_session_manager
 
 # Importar novas rotas
 try:
@@ -120,27 +121,27 @@ async def lifespan(app: FastAPI):
     health_status['status'] = 'healthy'
     health_status['last_check'] = datetime.now().isoformat()
     
-    # Inicializa o monitor de sessões automaticamente
+    # Inicializa o gerenciador unificado de sessões automaticamente
     try:
         logger.info(
-            "Iniciando Monitor de Sessões Unificadas...",
-            extra={"event": "monitor_startup", "component": "session_monitor"}
+            "Iniciando Gerenciador Unificado de Sessões...",
+            extra={"event": "unified_manager_startup", "component": "unified_session_manager"}
         )
-        await init_monitor_manager()
+        await init_unified_manager()
         logger.info(
-            "Monitor de Sessões iniciado com sucesso",
-            extra={"event": "monitor_started", "component": "session_monitor"}
+            "Gerenciador Unificado iniciado com sucesso",
+            extra={"event": "unified_manager_started", "component": "unified_session_manager"}
         )
     except Exception as e:
         logger.error(
-            f"Erro ao iniciar Monitor de Sessões: {e}",
+            f"Erro ao iniciar Gerenciador Unificado: {e}",
             extra={
-                "event": "monitor_startup_error",
-                "component": "session_monitor",
+                "event": "unified_manager_startup_error",
+                "component": "unified_session_manager",
                 "error": str(e)
             }
         )
-        # Não falha a aplicação se o monitor não iniciar
+        # Não falha a aplicação se o gerenciador não iniciar
     
     # Inicializa handlers
     try:
@@ -195,14 +196,13 @@ async def lifespan(app: FastAPI):
     )
     health_status['status'] = 'shutting_down'
     
-    # Para o monitor de sessões
+    # Para o gerenciador unificado de sessões
     try:
-        logger.info("Parando Monitor de Sessões...")
-        monitor_manager = get_monitor_manager()
-        await monitor_manager.stop()
-        logger.info("Monitor de Sessões parado com sucesso")
+        logger.info("Parando Gerenciador Unificado de Sessões...")
+        await stop_unified_manager()
+        logger.info("Gerenciador Unificado parado com sucesso")
     except Exception as e:
-        logger.error(f"Erro ao parar Monitor de Sessões: {e}")
+        logger.error(f"Erro ao parar Gerenciador Unificado: {e}")
     
     # Encerra todas as sessões ativas
     try:
@@ -855,6 +855,33 @@ async def clear_fallback_cache():
         "items_cleared": cache_stats_before["total_items"],
         "timestamp": datetime.now().isoformat()
     }
+
+@app.post(
+    "/api/web-chat",
+    tags=["Chat"],
+    summary="Chat Web Dedicado",
+    description="""Endpoint específico para chat via interface web.
+    Usa sempre a sessão 00000000-0000-0000-0000-000000000001.
+    """,
+    response_description="Stream SSE com resposta de Claude"
+)
+async def web_chat(chat_message: SecureChatMessage) -> StreamingResponse:
+    """Chat dedicado para interface web - usa sessão unificada"""
+    # Força usar a sessão web
+    chat_message.session_id = "00000000-0000-0000-0000-000000000001"
+
+    # Log da origem
+    logger.info(
+        "Mensagem via Web UI",
+        extra={
+            "event": "web_chat_message",
+            "session_id": chat_message.session_id,
+            "origin": "web"
+        }
+    )
+
+    # Usa o handler normal mas com sessão fixa
+    return await send_message(chat_message)
 
 @app.post(
     "/api/chat",
@@ -1825,6 +1852,70 @@ async def discover_projects():
         "count": len(projects),
         "message": f"Encontrados {len(projects)} projetos Claude Code"
     }
+
+@app.get(
+    "/api/realtime/latest/{project_name}",
+    tags=["Realtime"],
+    summary="Obter Mensagens Mais Recentes",
+    description="Retorna as mensagens mais recentes de um projeto para monitoramento em tempo real",
+    response_description="Lista de mensagens recentes"
+)
+async def get_realtime_latest(project_name: str, limit: int = 10):
+    """Endpoint para o NetworkMonitor obter mensagens recentes."""
+    from pathlib import Path as PathLib
+
+    try:
+        project_path = PathLib.home() / ".claude" / "projects" / project_name
+
+        if not project_path.exists():
+            raise HTTPException(status_code=404, detail=f"Projeto {project_name} não encontrado")
+
+        # Lista todos os arquivos JSONL do projeto
+        all_messages = []
+
+        for jsonl_file in project_path.glob("*.jsonl"):
+            try:
+                with open(jsonl_file, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+                    # Pega apenas as últimas linhas de cada arquivo
+                    for line in lines[-limit:]:
+                        if line.strip():
+                            try:
+                                data = json.loads(line)
+                                data['source_file'] = jsonl_file.name
+                                all_messages.append(data)
+                            except json.JSONDecodeError:
+                                pass
+            except Exception:
+                continue
+
+        # Ordena por timestamp e pega as mais recentes
+        all_messages.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        recent_messages = all_messages[:limit]
+
+        return {
+            "messages": recent_messages,
+            "count": len(recent_messages),
+            "project": project_name
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao obter mensagens recentes: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get(
+    "/api/analytics/projects",
+    tags=["Analytics"],
+    summary="Listar Projetos para Analytics",
+    description="Lista todos os projetos Claude Code com estatísticas para o dashboard",
+    response_description="Lista de projetos com métricas"
+)
+async def get_analytics_projects():
+    """Endpoint específico para o dashboard de analytics - lista projetos."""
+    # Reutiliza a lógica do discover_projects
+    return await discover_projects()
 
 @app.get(
     "/api/web-sessions",

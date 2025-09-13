@@ -180,14 +180,14 @@ class SecurityTester:
         except ValidationError as e:
             self.log_test("Ferramentas inválidas rejeitadas", True, f"ValidationError: {e}")
         
-        # Path perigoso
+        # Path permissivo
         dangerous_paths = ["/etc/passwd", "../../../etc", "path/with/|pipe"]
         for path in dangerous_paths:
             try:
                 SecureSessionConfigRequest(cwd=path)
-                self.log_test(f"Path perigoso rejeitado: {path}", False, "Deveria ter sido rejeitado")
+                self.log_test(f"Path permissivo rejeitado: {path}", False, "Deveria ter sido rejeitado")
             except ValidationError:
-                self.log_test(f"Path perigoso rejeitado: {path}", True, "ValidationError como esperado")
+                self.log_test(f"Path permissivo rejeitado: {path}", True, "ValidationError como esperado")
     
     async def test_rate_limiting(self):
         """Testa sistema de rate limiting."""

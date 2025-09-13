@@ -199,27 +199,39 @@ export default function ProjectDashboardPage() {
 
       // Define aba baseada no query parameter
       const tabParam = searchParams?.get('tab');
+
+      // Busca pela sessão unificada
+      const unifiedSession = sortedSessions.find((s: any) =>
+        s.id === '00000000-0000-0000-0000-000000000001'
+      );
+
       if (tabParam) {
-        // Se tem tab específica na URL (?tab=05d20033)
-        if (tabParam === 'overview') {
-          // Se tentar acessar overview, redireciona para primeira sessão
-          if (sortedSessions.length > 0) {
+        // Se tem tab específica na URL
+        if (tabParam === 'overview' || tabParam === 'unified') {
+          // Se pedir overview ou unified, abre sessão unificada
+          if (unifiedSession) {
+            setActiveTab(unifiedSession.id);
+          } else if (sortedSessions.length > 0) {
             setActiveTab(sortedSessions[0].id);
           }
         } else {
           // Busca sessão que termine com o ID curto
-          const matchingSession = sortedSessions.find((s: any) => 
+          const matchingSession = sortedSessions.find((s: any) =>
             s.id.slice(-8) === tabParam || s.id === tabParam
           );
           if (matchingSession) {
             setActiveTab(matchingSession.id);
+          } else if (unifiedSession) {
+            setActiveTab(unifiedSession.id); // Usa sessão unificada como fallback
           } else if (sortedSessions.length > 0) {
-            setActiveTab(sortedSessions[0].id); // Usa primeira sessão como fallback
+            setActiveTab(sortedSessions[0].id);
           }
         }
       } else {
-        // Sem query parameter, SEMPRE abre a primeira sessão por padrão
-        if (sortedSessions.length > 0) {
+        // Sem query parameter, SEMPRE abre a sessão unificada por padrão
+        if (unifiedSession) {
+          setActiveTab(unifiedSession.id);
+        } else if (sortedSessions.length > 0) {
           setActiveTab(sortedSessions[0].id);
         }
       }

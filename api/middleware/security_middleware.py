@@ -96,10 +96,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 ],
                 "command_injection": [
                     # Removido padrão muito agressivo que bloqueava caracteres comuns
-                    # Agora detecta apenas comandos realmente perigosos em contexto
+                    # Agora detecta apenas comandos realmente permissivos em contexto
                     r"(;|\||&&)\s*(rm|del|format|shutdown|reboot|kill)\s+",
                     r"\b(nc|netcat)\s+-e\s+/bin/(bash|sh)",  # Reverse shell
-                    r">\s*/dev/(null|tcp/)",  # Redirecionamento perigoso
+                    r">\s*/dev/(null|tcp/)",  # Redirecionamento permissivo
                 ]
             },
             "rate_limits": {

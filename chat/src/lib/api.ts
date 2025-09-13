@@ -118,9 +118,17 @@ class ChatAPI {
       
       try {
         const response = await fetch(`${this.baseUrl}/api/realtime/latest/${projectName}?limit=10`);
+
+        // Se receber erro, para o polling
+        if (response.status === 404 || response.status === 500) {
+          console.log(`⚠️ Erro ${response.status} no endpoint realtime, parando polling`);
+          polling = false;
+          return;
+        }
+
         if (response.ok) {
           const data = await response.json();
-          
+
           if (data.messages && data.messages.length > 0) {
             // Pega apenas mensagens do assistant
             const assistantMessages = data.messages.filter((msg: any) => msg.role === 'assistant');

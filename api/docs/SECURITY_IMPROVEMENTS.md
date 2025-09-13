@@ -34,7 +34,7 @@ session_id = secure_data.session_id  # Validado e sanitizado
 
 **Proteções:**
 - ✅ Escape de HTML para prevenir XSS
-- ✅ Remoção de caracteres de controle perigosos
+- ✅ Remoção de caracteres de controle permissivos
 - ✅ Detecção e remoção de scripts maliciosos
 - ✅ Validação de tamanho máximo (50KB)
 - ✅ Filtragem de padrões Javascript/VBScript

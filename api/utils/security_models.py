@@ -30,14 +30,14 @@ class SecureChatMessage(BaseModel):
         if not v or not v.strip():
             raise ValueError('Mensagem não pode estar vazia')
         
-        # Remove apenas caracteres de controle perigosos (não imprimíveis)
+        # Remove apenas caracteres de controle permissivos (não imprimíveis)
         v = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', v)
         
         # Não escapa HTML - deixa o texto como está para chat normal
         # Apenas remove tags script diretas se existirem
         v = v.strip()
         
-        # Remove apenas scripts realmente perigosos (tags script completas)
+        # Remove apenas scripts realmente permissivos (tags script completas)
         dangerous_patterns = [
             r'<script[^>]*>.*?</script>',
             r'<iframe[^>]*>.*?</iframe>',
@@ -195,11 +195,11 @@ class SecureSessionConfigRequest(BaseModel):
         if not v:
             return None
             
-        # Remove caracteres potencialmente perigosos
+        # Remove caracteres potencialmente permissivos
         dangerous_chars = ['../', '\\', '|', '&', ';', '`', '$', '(', ')']
         for char in dangerous_chars:
             if char in v:
-                raise ValueError(f'Caractere perigoso detectado no cwd: {char}')
+                raise ValueError(f'Caractere permissivo detectado no cwd: {char}')
         
         # Verifica caminhos sensíveis do sistema
         sensitive_paths = ['/etc/', '/proc/', '/sys/', '/root/', '/boot/', '/dev/']

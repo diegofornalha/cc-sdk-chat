@@ -637,7 +637,7 @@ export function ChatInterface({
             case "processing":
               // Inicia polling em tempo real quando começar o processamento
               console.log('🎯 Processamento iniciado - aguardando respostas em tempo real');
-              // Se tiver informação de ferramenta no processing
+              // NÃO mostra "Analisando..." aqui, apenas se tiver ferramenta específica
               if (data.tool) {
                 const toolDisplay = {
                   'Read': '📄 Lendo arquivo',
@@ -824,6 +824,17 @@ export function ChatInterface({
                 );
               }
               break;
+
+            case "done":
+              console.log("🏁 [DEBUG] Evento 'done' recebido - finalizando streaming");
+              // Força limpeza imediata ao receber done
+              setTimeout(() => {
+                setStreaming(false);
+                setStreamingContent("");
+                setProcessing(false);
+                clearTypingQueue();
+              }, 100);
+              break;
           }
         },
         (error) => {
@@ -841,11 +852,23 @@ export function ChatInterface({
             timestamp: new Date().toISOString(),
           });
 
-          // Aguarda digitação terminar antes de finalizar streaming
-          waitForTypingToFinish(() => {
+          // Finaliza streaming com timeout de segurança
+          const finishStreaming = () => {
             setStreaming(false);
             setStreamingContent("");
             setProcessing(false);
+          };
+
+          // Tenta aguardar digitação mas com timeout de 2 segundos
+          const timeoutId = setTimeout(() => {
+            console.log("⚠️ Timeout na finalização - forçando limpeza");
+            clearTypingQueue();
+            finishStreaming();
+          }, 2000);
+
+          waitForTypingToFinish(() => {
+            clearTimeout(timeoutId);
+            finishStreaming();
           });
         },
         currentSessionId, // Passa o sessionId correto para a API
@@ -877,7 +900,7 @@ export function ChatInterface({
       setStreaming(false);
       setStreamingContent("");
       setProcessing(false);
-      console.error("Erro ao interromper");
+      console.error("Erro ao interromper:", error);
     }
   };
 
@@ -889,7 +912,7 @@ export function ChatInterface({
       clearSession(activeSessionId);
       console.log("Sessão limpa");
     } catch (error) {
-      console.error("Erro ao limpar sessão");
+      console.error("Erro ao limpar sessão:", error);
     }
   };
 
@@ -1158,11 +1181,11 @@ export function ChatInterface({
 
                     {/* Indicador de processamento removido - conteúdo aparece direto */}
 
-                    {isStreaming && (
+                    {isStreaming && streamingContent && (
                       <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
                         <ChatMessage
                           role="assistant"
-                          content={streamingContent || "🔍 Analisando..."}
+                          content={streamingContent}
                           isStreaming
                           sessionTitle={activeSession?.title}
                           sessionId={activeSession?.id}
