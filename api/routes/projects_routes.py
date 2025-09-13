@@ -124,8 +124,8 @@ async def get_projects():
             # Escanear projeto
             stats = scan_project_directory(project_dir)
             
-            if stats['sessions_count'] > 0:  # Só incluir projetos com sessões
-                projects.append({
+            # Incluir todos os projetos, mesmo vazios
+            projects.append({
                     'name': project_dir.name,
                     'path': str(project_dir),
                     'url_path': project_dir.name,  # Adicionar campo url_path esperado pelo frontend
@@ -150,19 +150,27 @@ async def get_project_sessions(project_name: str):
     Lista todas as sessões de um projeto específico
     """
     project_path = PROJECTS_DIR / project_name
-    
+    print(f"DEBUG: Procurando projeto em: {project_path}")
+    print(f"DEBUG: Projeto existe? {project_path.exists()}")
+
     if not project_path.exists():
-        raise HTTPException(status_code=404, detail="Projeto não encontrado")
-    
+        print(f"DEBUG: Projeto não encontrado: {project_name}")
+        # Retornar vazio ao invés de 404 para projetos recém-criados
+        return {
+            "project_name": project_name,
+            "sessions": [],
+            "total": 0
+        }
+
     stats = scan_project_directory(project_path)
-    
+
     # Ordenar sessões por última atividade
     sessions = sorted(
         stats['sessions'],
         key=lambda x: x['last_activity'],
         reverse=True
-    )
-    
+    ) if stats['sessions'] else []
+
     return {
         "project_name": project_name,
         "sessions": sessions,
