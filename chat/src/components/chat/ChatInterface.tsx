@@ -491,8 +491,7 @@ export function ChatInterface({
             `**/help** - Mostrar esta ajuda\n\n` +
             `**Atalhos de Teclado**:\n` +
             `• **Ctrl+Enter** - Enviar mensagem\n` +
-            `• **Ctrl+Shift+N** - Monitor de Rede\n` +
-            `• **Ctrl+C** - Interromper resposta`;
+            `• **Ctrl+Shift+N** - Monitor de Rede`;
           
           addMessage(activeSessionId, {
             role: "assistant",

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Send, RefreshCw, Mic, Square } from 'lucide-react'
+import { Send, RefreshCw, Mic } from 'lucide-react'
 import { Button } from '../ui/button'
 import { cn } from '@/lib/utils'
 import { useHotkeys } from 'react-hotkeys-hook'
@@ -191,31 +191,18 @@ Mensagem atual: ${finalMessage}`
               <RefreshCw className="h-5 w-5" />
             </Button>
 
-            {/* Send/Interrupt button */}
-            {isStreaming ? (
-              <Button
-                type="button"
-                variant="destructive"
-                size="icon"
-                onClick={onInterrupt}
-                className="h-[52px] w-[52px]"
-                title="Interromper (Ctrl+C)"
-              >
-                <Square className="h-5 w-5" />
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="default"
-                size="icon"
-                onClick={handleSend}
-                disabled={isInputDisabled || !message.trim()}
-                className="h-[52px] w-[52px]"
-                title="Enviar (Ctrl+Enter)"
-              >
-                <Send className="h-5 w-5" />
-              </Button>
-            )}
+            {/* Send button */}
+            <Button
+              type="button"
+              variant="default"
+              size="icon"
+              onClick={handleSend}
+              disabled={isInputDisabled || !message.trim()}
+              className="h-[52px] w-[52px]"
+              title="Enviar (Ctrl+Enter)"
+            >
+              <Send className="h-5 w-5" />
+            </Button>
           </div>
         </div>
 
