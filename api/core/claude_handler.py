@@ -581,22 +581,31 @@ class ClaudeHandler:
     
     async def _create_new_client(self, config: SessionConfig) -> ClaudeSDKClient:
         """Cria novo cliente SDK."""
-        # Cria opções do SDK baseadas na configuração
-        options = None
-        if any([config.system_prompt, config.allowed_tools, config.max_turns, config.cwd]):
-            options = ClaudeCodeOptions(
-                system_prompt=config.system_prompt,
-                allowed_tools=config.allowed_tools if config.allowed_tools else None,
-                max_turns=config.max_turns,
-                permission_mode=config.permission_mode,
-                cwd=config.cwd
-            )
-        
+        # SEMPRE cria opções para garantir que permission_mode seja aplicado
+        options = ClaudeCodeOptions(
+            system_prompt=config.system_prompt if config.system_prompt else None,
+            allowed_tools=config.allowed_tools if config.allowed_tools else None,
+            max_turns=config.max_turns if config.max_turns else None,
+            permission_mode=config.permission_mode,  # SEMPRE inclui bypass
+            cwd=config.cwd if config.cwd else None
+        )
+
+        # Log de debug para verificar permissões
+        self.logger.info(
+            f"🔑 Criando cliente com permission_mode: {config.permission_mode}",
+            extra={
+                "event": "client_options",
+                "permission_mode": config.permission_mode,
+                "has_allowed_tools": bool(config.allowed_tools),
+                "cwd": config.cwd
+            }
+        )
+
         client = ClaudeSDKClient(options=options)
         await asyncio.wait_for(client.connect(), timeout=20.0)
-        
+
         self.logger.info(
-            "Novo cliente criado",
+            "Novo cliente criado com bypass permissions",
             extra={"event": "client_created", "pool_size": len(self.connection_pool)}
         )
         
