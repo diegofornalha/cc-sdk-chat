@@ -24,8 +24,13 @@ export async function POST(request: NextRequest) {
 
     const filePath = path.join(sessionDir, `${id}.jsonl`)
 
-    // Preparar mensagem no formato JSONL
+    // Preparar mensagem no formato JSONL correto
     const jsonlContent = JSON.stringify({
+      parentUuid: message.metadata?.originalSessionId || "061436a1-d5eb-466b-84bd-74b4f9b69d52",
+      isSidechain: false,
+      userType: "external",
+      cwd: "/Users/2a/.claude/cc-sdk-chat/api",
+      sessionId: id,
       role: message.role,
       content: message.content,
       timestamp: message.timestamp,
