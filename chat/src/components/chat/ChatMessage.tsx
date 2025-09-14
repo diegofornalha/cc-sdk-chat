@@ -1,10 +1,11 @@
 import React from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'isomorphic-dompurify'
-import { Copy, Check, User, Bot, Code, Terminal, FileText, Brain, Wrench } from 'lucide-react'
+import { Copy, Check, User, Bot, Code, Terminal, FileText, Brain, Wrench, Star } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Card } from '../ui/card'
 import { cn, formatTokens, formatCost } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
 
 // Tipos para os blocos de conteúdo
 interface TextBlock {
@@ -702,12 +703,12 @@ interface ChatMessageProps {
   sessionOrigin?: string
 }
 
-export function ChatMessage({ 
-  role, 
-  content, 
-  timestamp, 
-  tokens, 
-  cost, 
+export function ChatMessage({
+  role,
+  content,
+  timestamp,
+  tokens,
+  cost,
   tools,
   isStreaming = false,
   sessionTitle,
@@ -715,7 +716,30 @@ export function ChatMessage({
   sessionOrigin
 }: ChatMessageProps) {
   const [copied, setCopied] = React.useState(false)
+  const [favorited, setFavorited] = React.useState(false)
   const messageRef = React.useRef<HTMLDivElement>(null)
+  const router = useRouter()
+
+  // Gerar ID único para esta mensagem baseado no conteúdo
+  const messageId = React.useMemo(() => {
+    const contentStr = typeof content === 'string' ? content : JSON.stringify(content)
+    // Usar hash simples ao invés de btoa para suportar Unicode
+    let hash = 0
+    for (let i = 0; i < Math.min(contentStr.length, 100); i++) {
+      const char = contentStr.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32bit integer
+    }
+    return `msg_${Math.abs(hash)}_${role}_${timestamp?.getTime() || Date.now()}`
+  }, [content, role, timestamp])
+
+  // Verificar se esta mensagem já foi favoritada (localStorage)
+  React.useEffect(() => {
+    const favoritedMessages = JSON.parse(localStorage.getItem('favoritedMessages') || '[]')
+    if (favoritedMessages.includes(messageId)) {
+      setFavorited(true)
+    }
+  }, [messageId])
   
   // Debug desabilitado - apenas para debugging específico quando necessário
   // Removido para prevenir loops infinitos de logging
@@ -811,6 +835,63 @@ export function ChatMessage({
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }, [getContentForCopy])
+
+  const handleFavorite = React.useCallback(async () => {
+    try {
+      // Toggle favorito
+      const newFavoritedState = !favorited
+
+      if (newFavoritedState) {
+        // Adicionar aos favoritos
+        const favoritesSessionId = '00000000-0000-0000-0000-000000000002'
+
+        // Preparar conteúdo para a sessão favorita
+        const favoriteContent = {
+          role,
+          content: getContentForCopy(),
+          timestamp: timestamp || new Date(),
+          metadata: {
+            originalSessionId: sessionId,
+            originalSessionTitle: sessionTitle,
+            favoritedAt: new Date().toISOString(),
+            messageId: messageId
+          }
+        }
+
+        // Salvar nos favoritos
+        const response = await fetch('/api/sessions/favorite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: favoritesSessionId,
+            message: favoriteContent
+          })
+        })
+
+        if (response.ok) {
+          // Atualizar estado e localStorage
+          setFavorited(true)
+          const favoritedMessages = JSON.parse(localStorage.getItem('favoritedMessages') || '[]')
+          favoritedMessages.push(messageId)
+          localStorage.setItem('favoritedMessages', JSON.stringify(favoritedMessages))
+
+          console.log('✅ Mensagem adicionada aos favoritos!')
+        } else {
+          console.error('Erro ao favoritar mensagem')
+        }
+      } else {
+        // Remover dos favoritos (apenas do localStorage, não do arquivo)
+        setFavorited(false)
+        const favoritedMessages = JSON.parse(localStorage.getItem('favoritedMessages') || '[]')
+        const filtered = favoritedMessages.filter((id: string) => id !== messageId)
+        localStorage.setItem('favoritedMessages', JSON.stringify(filtered))
+
+        console.log('⭐ Mensagem removida dos favoritos (localmente)')
+      }
+    } catch (error) {
+      console.error('Erro ao favoritar mensagem:', error)
+    }
+  }, [favorited, role, getContentForCopy, sessionId, sessionTitle, timestamp, messageId])
 
   const getIcon = () => {
     switch (role) {
@@ -963,17 +1044,31 @@ export function ChatMessage({
 
               {/* Actions */}
               {!isStreaming && (
-                <div className="opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={handleCopy}
                     className="h-8 w-8"
+                    title="Copiar mensagem"
                   >
                     {copied ? (
                       <Check className="h-4 w-4 text-green-500" />
                     ) : (
                       <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleFavorite}
+                    className="h-8 w-8"
+                    title="Favoritar e criar sessão isolada"
+                  >
+                    {favorited ? (
+                      <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                    ) : (
+                      <Star className="h-4 w-4" />
                     )}
                   </Button>
                 </div>
