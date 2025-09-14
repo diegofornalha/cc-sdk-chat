@@ -723,8 +723,15 @@ export function ChatMessage({
   // Gerar ID único para esta mensagem baseado no conteúdo
   const messageId = React.useMemo(() => {
     const contentStr = typeof content === 'string' ? content : JSON.stringify(content)
-    return btoa(contentStr.slice(0, 100)).replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)
-  }, [content])
+    // Usar hash simples ao invés de btoa para suportar Unicode
+    let hash = 0
+    for (let i = 0; i < Math.min(contentStr.length, 100); i++) {
+      const char = contentStr.charCodeAt(i)
+      hash = ((hash << 5) - hash) + char
+      hash = hash & hash // Convert to 32bit integer
+    }
+    return `msg_${Math.abs(hash)}_${role}_${timestamp?.getTime() || Date.now()}`
+  }, [content, role, timestamp])
 
   // Verificar se esta mensagem já foi favoritada (localStorage)
   React.useEffect(() => {
