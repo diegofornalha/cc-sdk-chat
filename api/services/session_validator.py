@@ -416,6 +416,10 @@ class SessionValidator:
                     if not dry_run:
                         file_path = os.path.join(self.project_path, f"{session_id}.jsonl")
                         if os.path.exists(file_path):
+                            # EXCEÇÃO IMPORTANTE: NUNCA APAGAR FAVORITOS!
+                            if session_id == "00000000-0000-0000-0000-000000000002":
+                                logger.warning(f"⭐ IGNORANDO ARQUIVO DE FAVORITOS: {file_path}")
+                                continue
                             size = os.path.getsize(file_path)
                             os.remove(file_path)
                             result['size_recovered'] += size
@@ -432,6 +436,10 @@ class SessionValidator:
                     if not dry_run:
                         file_path = os.path.join(self.project_path, f"{session_id}.jsonl")
                         if os.path.exists(file_path):
+                            # EXCEÇÃO: ARQUIVO DE FAVORITOS NUNCA DEVE SER APAGADO!
+                            if session_id == "00000000-0000-0000-0000-000000000002":
+                                logger.warning(f"⭐ PRESERVANDO FAVORITOS: {file_path}")
+                                continue
                             os.remove(file_path)
                     
                     result['removed_sessions'].append(session_id)

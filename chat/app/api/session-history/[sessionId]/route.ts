@@ -22,9 +22,23 @@ export async function GET(
           `${sessionId}.jsonl`
         );
 
+        console.log('📁 Lendo arquivo de favoritos:', filePath);
         const fileContent = await fs.readFile(filePath, 'utf-8');
-        const lines = fileContent.trim().split('\n');
-        const messages = lines.map(line => JSON.parse(line));
+        console.log('📝 Conteúdo bruto:', fileContent.length, 'caracteres');
+
+        const lines = fileContent.trim().split('\n').filter(line => line.trim());
+        console.log('📊 Linhas encontradas:', lines.length);
+
+        const messages = lines.map(line => {
+          try {
+            return JSON.parse(line);
+          } catch (e) {
+            console.error('Erro ao parsear linha:', line);
+            return null;
+          }
+        }).filter(Boolean);
+
+        console.log('✅ Mensagens parseadas:', messages.length);
 
         return NextResponse.json({
           sessionId,
@@ -33,7 +47,8 @@ export async function GET(
           origin: 'local_favorites'
         });
       } catch (fileError) {
-        console.log('Arquivo de favoritos não encontrado, tentando API');
+        console.error('❌ Erro ao ler arquivo de favoritos:', fileError);
+        console.log('Tentando API fallback...');
       }
     }
 

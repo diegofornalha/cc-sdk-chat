@@ -103,7 +103,11 @@ class UnifiedSessionManager:
                                 pass
 
                 # Deleta arquivo após processar
-                file.unlink()
+                # NÃO APAGAR ARQUIVO DE FAVORITOS!
+                if file.name != f"{FAVORITES_SESSION_ID}.jsonl":
+                    file.unlink()
+                else:
+                    logger.info(f"  ⭐ Preservando arquivo de favoritos: {file.name}")
                 logger.info(f"  🗑️  Deletado: {file.name}")
             except Exception as e:
                 logger.error(f"  ❌ Erro ao processar {file.name}: {e}")
@@ -287,7 +291,11 @@ class UnifiedSessionManager:
                 logger.info(f"✅ Movidas {len(lines_moved)} linhas de {source_file.name}")
 
             # Deleta arquivo original
-            source_file.unlink()
+            # NÃO APAGAR ARQUIVO DE FAVORITOS!
+            if source_file.name != f"{FAVORITES_SESSION_ID}.jsonl":
+                source_file.unlink()
+            else:
+                logger.info(f"⭐ Preservando arquivo de favoritos durante migração")
             logger.info(f"🗑️ Arquivo {source_file.name} deletado")
 
             return True
