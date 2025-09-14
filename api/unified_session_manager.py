@@ -17,8 +17,9 @@ import logging
 # Configuração de logging
 logger = logging.getLogger(__name__)
 
-# Session ID unificado
-UNIFIED_SESSION_ID = "00000000-0000-0000-0000-000000000001"
+# Session IDs especiais
+UNIFIED_SESSION_ID = "00000000-0000-0000-0000-000000000001"  # Chat unificado
+FAVORITES_SESSION_ID = "00000000-0000-0000-0000-000000000002"  # Favoritos (NÃO CONSOLIDAR!)
 PROJECT_NAME = "-Users-2a--claude-cc-sdk-chat-api"
 
 
@@ -58,10 +59,11 @@ class UnifiedSessionManager:
         return 0
 
         # Código antigo comentado para referência
-        # Lista todos os arquivos JSONL exceto o unificado
+        # Lista todos os arquivos JSONL exceto o unificado E o de favoritos
         other_files = [
             f for f in self.project_path.glob("*.jsonl")
             if f.name != f"{UNIFIED_SESSION_ID}.jsonl"
+            and f.name != f"{FAVORITES_SESSION_ID}.jsonl"  # NÃO TOCAR NO ARQUIVO DE FAVORITOS!
         ]
 
         if not other_files:
@@ -176,7 +178,11 @@ class UnifiedSessionManager:
         while self.is_running:
             try:
                 # Apenas monitora e reporta, não consolida mais
-                jsonl_files = list(self.project_path.glob("*.jsonl"))
+                # IMPORTANTE: IGNORA o arquivo de favoritos - NUNCA APAGAR!
+                jsonl_files = [
+                    f for f in self.project_path.glob("*.jsonl")
+                    if f.name != f"{FAVORITES_SESSION_ID}.jsonl"  # PRESERVA FAVORITOS!
+                ]
 
                 web_session = None
                 terminal_sessions = []
