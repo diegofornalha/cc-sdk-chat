@@ -817,11 +817,8 @@ export function ChatMessage({
 
   const handleFavorite = React.useCallback(async () => {
     try {
-      console.log('Iniciando favoritar mensagem...')
-
       // Usar sessão fixa para favoritos
-      const newSessionId = '00000000-0000-0000-0000-000000000002'
-      console.log('Session ID dos favoritos:', newSessionId)
+      const favoritesSessionId = '00000000-0000-0000-0000-000000000002'
 
       // Preparar conteúdo para a sessão favorita
       const favoriteContent = {
@@ -834,43 +831,28 @@ export function ChatMessage({
           favoritedAt: new Date().toISOString()
         }
       }
-      console.log('Conteúdo a ser favoritado:', favoriteContent)
 
-      // Criar arquivo JSONL
+      // Salvar nos favoritos
       const response = await fetch('/api/sessions/favorite', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: newSessionId,
+          id: favoritesSessionId,
           message: favoriteContent
         })
       })
 
-      console.log('Resposta da API:', response.status)
-
       if (response.ok) {
-        const data = await response.json()
-        console.log('Dados da resposta:', data)
-
+        // Mostrar feedback visual de sucesso
         setFavorited(true)
         setTimeout(() => setFavorited(false), 2000)
 
-        // Por enquanto, vamos apenas logar ao invés de navegar
-        console.log('Sessão favorita criada! ID:', newSessionId)
-        console.log('Arquivo salvo em:', data.path)
-
-        // TODO: Implementar navegação para a nova sessão
-        // router.push(`/chat/${newSessionId}`)
-
-        // Por enquanto, vamos abrir em uma nova aba
-        window.open(`http://localhost:3082/-Users-2a--claude-cc-sdk-chat-api/${newSessionId}`, '_blank')
+        console.log('✅ Mensagem adicionada aos favoritos!')
       } else {
-        const errorText = await response.text()
-        console.error('Erro na resposta:', errorText)
+        console.error('Erro ao favoritar mensagem')
       }
     } catch (error) {
       console.error('Erro ao favoritar mensagem:', error)
-      alert('Erro ao favoritar mensagem. Verifique o console.')
     }
   }, [role, getContentForCopy, sessionId, sessionTitle, timestamp])
 
