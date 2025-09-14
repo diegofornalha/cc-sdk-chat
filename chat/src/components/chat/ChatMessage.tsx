@@ -719,6 +719,20 @@ export function ChatMessage({
   const [favorited, setFavorited] = React.useState(false)
   const messageRef = React.useRef<HTMLDivElement>(null)
   const router = useRouter()
+
+  // Gerar ID único para esta mensagem baseado no conteúdo
+  const messageId = React.useMemo(() => {
+    const contentStr = typeof content === 'string' ? content : JSON.stringify(content)
+    return btoa(contentStr.slice(0, 100)).replace(/[^a-zA-Z0-9]/g, '').slice(0, 20)
+  }, [content])
+
+  // Verificar se esta mensagem já foi favoritada (localStorage)
+  React.useEffect(() => {
+    const favoritedMessages = JSON.parse(localStorage.getItem('favoritedMessages') || '[]')
+    if (favoritedMessages.includes(messageId)) {
+      setFavorited(true)
+    }
+  }, [messageId])
   
   // Debug desabilitado - apenas para debugging específico quando necessário
   // Removido para prevenir loops infinitos de logging
@@ -817,44 +831,60 @@ export function ChatMessage({
 
   const handleFavorite = React.useCallback(async () => {
     try {
-      // Usar sessão fixa para favoritos
-      const favoritesSessionId = '00000000-0000-0000-0000-000000000002'
+      // Toggle favorito
+      const newFavoritedState = !favorited
 
-      // Preparar conteúdo para a sessão favorita
-      const favoriteContent = {
-        role,
-        content: getContentForCopy(),
-        timestamp: timestamp || new Date(),
-        metadata: {
-          originalSessionId: sessionId,
-          originalSessionTitle: sessionTitle,
-          favoritedAt: new Date().toISOString()
+      if (newFavoritedState) {
+        // Adicionar aos favoritos
+        const favoritesSessionId = '00000000-0000-0000-0000-000000000002'
+
+        // Preparar conteúdo para a sessão favorita
+        const favoriteContent = {
+          role,
+          content: getContentForCopy(),
+          timestamp: timestamp || new Date(),
+          metadata: {
+            originalSessionId: sessionId,
+            originalSessionTitle: sessionTitle,
+            favoritedAt: new Date().toISOString(),
+            messageId: messageId
+          }
         }
-      }
 
-      // Salvar nos favoritos
-      const response = await fetch('/api/sessions/favorite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: favoritesSessionId,
-          message: favoriteContent
+        // Salvar nos favoritos
+        const response = await fetch('/api/sessions/favorite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: favoritesSessionId,
+            message: favoriteContent
+          })
         })
-      })
 
-      if (response.ok) {
-        // Mostrar feedback visual de sucesso
-        setFavorited(true)
-        setTimeout(() => setFavorited(false), 2000)
+        if (response.ok) {
+          // Atualizar estado e localStorage
+          setFavorited(true)
+          const favoritedMessages = JSON.parse(localStorage.getItem('favoritedMessages') || '[]')
+          favoritedMessages.push(messageId)
+          localStorage.setItem('favoritedMessages', JSON.stringify(favoritedMessages))
 
-        console.log('✅ Mensagem adicionada aos favoritos!')
+          console.log('✅ Mensagem adicionada aos favoritos!')
+        } else {
+          console.error('Erro ao favoritar mensagem')
+        }
       } else {
-        console.error('Erro ao favoritar mensagem')
+        // Remover dos favoritos (apenas do localStorage, não do arquivo)
+        setFavorited(false)
+        const favoritedMessages = JSON.parse(localStorage.getItem('favoritedMessages') || '[]')
+        const filtered = favoritedMessages.filter((id: string) => id !== messageId)
+        localStorage.setItem('favoritedMessages', JSON.stringify(filtered))
+
+        console.log('⭐ Mensagem removida dos favoritos (localmente)')
       }
     } catch (error) {
       console.error('Erro ao favoritar mensagem:', error)
     }
-  }, [role, getContentForCopy, sessionId, sessionTitle, timestamp])
+  }, [favorited, role, getContentForCopy, sessionId, sessionTitle, timestamp, messageId])
 
   const getIcon = () => {
     switch (role) {
