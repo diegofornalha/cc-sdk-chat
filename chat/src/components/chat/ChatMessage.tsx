@@ -819,9 +819,9 @@ export function ChatMessage({
     try {
       console.log('Iniciando favoritar mensagem...')
 
-      // Gerar UUID único para a nova sessão
-      const newSessionId = crypto.randomUUID()
-      console.log('Novo session ID:', newSessionId)
+      // Usar sessão fixa para favoritos
+      const newSessionId = '00000000-0000-0000-0000-000000000002'
+      console.log('Session ID dos favoritos:', newSessionId)
 
       // Preparar conteúdo para a sessão favorita
       const favoriteContent = {
@@ -863,7 +863,7 @@ export function ChatMessage({
         // router.push(`/chat/${newSessionId}`)
 
         // Por enquanto, vamos abrir em uma nova aba
-        window.open(`http://localhost:3082/chat/${newSessionId}`, '_blank')
+        window.open(`http://localhost:3082/-Users-2a--claude-cc-sdk-chat-api/${newSessionId}`, '_blank')
       } else {
         const errorText = await response.text()
         console.error('Erro na resposta:', errorText)

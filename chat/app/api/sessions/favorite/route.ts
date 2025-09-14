@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
       metadata: message.metadata
     }) + '\n'
 
-    // Escrever arquivo
-    await fs.writeFile(filePath, jsonlContent, 'utf-8')
+    // Adicionar ao arquivo (append ao invés de write)
+    await fs.appendFile(filePath, jsonlContent, 'utf-8')
 
     return NextResponse.json({
       success: true,
