@@ -817,8 +817,11 @@ export function ChatMessage({
 
   const handleFavorite = React.useCallback(async () => {
     try {
+      console.log('Iniciando favoritar mensagem...')
+
       // Gerar UUID único para a nova sessão
       const newSessionId = crypto.randomUUID()
+      console.log('Novo session ID:', newSessionId)
 
       // Preparar conteúdo para a sessão favorita
       const favoriteContent = {
@@ -831,6 +834,7 @@ export function ChatMessage({
           favoritedAt: new Date().toISOString()
         }
       }
+      console.log('Conteúdo a ser favoritado:', favoriteContent)
 
       // Criar arquivo JSONL
       const response = await fetch('/api/sessions/favorite', {
@@ -842,17 +846,33 @@ export function ChatMessage({
         })
       })
 
+      console.log('Resposta da API:', response.status)
+
       if (response.ok) {
+        const data = await response.json()
+        console.log('Dados da resposta:', data)
+
         setFavorited(true)
         setTimeout(() => setFavorited(false), 2000)
 
-        // Navegar para a nova sessão
-        router.push(`/chat/${newSessionId}`)
+        // Por enquanto, vamos apenas logar ao invés de navegar
+        console.log('Sessão favorita criada! ID:', newSessionId)
+        console.log('Arquivo salvo em:', data.path)
+
+        // TODO: Implementar navegação para a nova sessão
+        // router.push(`/chat/${newSessionId}`)
+
+        // Por enquanto, vamos abrir em uma nova aba
+        window.open(`http://localhost:3082/chat/${newSessionId}`, '_blank')
+      } else {
+        const errorText = await response.text()
+        console.error('Erro na resposta:', errorText)
       }
     } catch (error) {
       console.error('Erro ao favoritar mensagem:', error)
+      alert('Erro ao favoritar mensagem. Verifique o console.')
     }
-  }, [role, getContentForCopy, sessionId, sessionTitle, timestamp, router])
+  }, [role, getContentForCopy, sessionId, sessionTitle, timestamp])
 
   const getIcon = () => {
     switch (role) {
