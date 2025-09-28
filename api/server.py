@@ -27,8 +27,8 @@ from middleware.rate_limiter import RateLimitManager
 from monitoring.stability_monitor import stability_monitor, CircuitBreakerConfig, CircuitState
 from monitoring.fallback_system import fallback_system, FallbackConfig, FallbackStrategy
 
-# Importar gerenciador unificado de sessões
-from unified_session_manager import init_unified_manager, stop_unified_manager, get_unified_manager
+# Importar apenas gerenciador web de sessões (sem unificação com terminal)
+# from unified_session_manager import init_unified_manager, stop_unified_manager, get_unified_manager
 from web_session_manager import get_web_session_manager
 
 # Importar novas rotas
@@ -121,27 +121,12 @@ async def lifespan(app: FastAPI):
     health_status['status'] = 'healthy'
     health_status['last_check'] = datetime.now().isoformat()
     
-    # Inicializa o gerenciador unificado de sessões automaticamente
-    try:
-        logger.info(
-            "Iniciando Gerenciador Unificado de Sessões...",
-            extra={"event": "unified_manager_startup", "component": "unified_session_manager"}
-        )
-        await init_unified_manager()
-        logger.info(
-            "Gerenciador Unificado iniciado com sucesso",
-            extra={"event": "unified_manager_started", "component": "unified_session_manager"}
-        )
-    except Exception as e:
-        logger.error(
-            f"Erro ao iniciar Gerenciador Unificado: {e}",
-            extra={
-                "event": "unified_manager_startup_error",
-                "component": "unified_session_manager",
-                "error": str(e)
-            }
-        )
-        # Não falha a aplicação se o gerenciador não iniciar
+    # Gerenciador web mantém sua própria sessão (00000000-0000-0000-0000-000000000001)
+    # SEM unificar com sessões do terminal
+    logger.info(
+        "Usando sessão web independente (sem unificação com terminal)",
+        extra={"event": "web_session_independent", "component": "web_session_manager"}
+    )
     
     # Inicializa handlers
     try:
@@ -196,13 +181,8 @@ async def lifespan(app: FastAPI):
     )
     health_status['status'] = 'shutting_down'
     
-    # Para o gerenciador unificado de sessões
-    try:
-        logger.info("Parando Gerenciador Unificado de Sessões...")
-        await stop_unified_manager()
-        logger.info("Gerenciador Unificado parado com sucesso")
-    except Exception as e:
-        logger.error(f"Erro ao parar Gerenciador Unificado: {e}")
+    # Gerenciador web mantém sessão independente - sem unificação
+    logger.info("Sessões web e terminal permanecem separadas")
     
     # Encerra todas as sessões ativas
     try:

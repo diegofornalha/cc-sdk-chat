@@ -48,13 +48,11 @@ class UnifiedSessionManager:
             logger.info(f"✨ Criado arquivo unificado: {self.unified_file.name}")
 
     def consolidate_existing_files(self) -> int:
-        """Consolida todos os arquivos existentes no arquivo unificado"""
-        logger.info("🔄 Iniciando consolidação de arquivos existentes...")
-
-        # IMPORTANTE: NÃO consolida mais! Mantém sessões separadas
-        logger.info("  ℹ️ Modo de sessões independentes ativado")
+        """NÃO consolida mais - mantém sessões separadas"""
+        logger.info("🔄 Modo de sessões independentes ativado")
         logger.info("  📁 Sessão web: 00000000-0000-0000-0000-000000000001")
-        logger.info("  💻 Sessões terminal: mantidas separadas")
+        logger.info("  💻 Sessões terminal: mantidas separadas em seus próprios arquivos")
+        logger.info("  ⛔ Unificação DESABILITADA")
         return 0
 
         # Código antigo comentado para referência
@@ -122,49 +120,12 @@ class UnifiedSessionManager:
         return len(all_entries)
 
     def sync_file_to_unified(self, source_file: Path) -> int:
-        """Sincroniza conteúdo de um arquivo para o arquivo unificado"""
-        if str(source_file) in self.processing_files:
-            return 0
-
-        self.processing_files.add(str(source_file))
-        lines_added = 0
-
-        try:
-            # Aguarda arquivo estabilizar
-            time.sleep(0.1)
-
-            # Lê linhas novas do arquivo
-            current_size = source_file.stat().st_size
-            last_size = self.last_processed.get(str(source_file), 0)
-
-            if current_size > last_size:
-                with open(source_file, 'r', encoding='utf-8') as f:
-                    f.seek(last_size)
-                    new_content = f.read()
-
-                if new_content.strip():
-                    # Processa e adiciona ao arquivo unificado
-                    with open(self.unified_file, 'a', encoding='utf-8') as f:
-                        for line in new_content.split('\n'):
-                            if line.strip():
-                                try:
-                                    data = json.loads(line)
-                                    data['sessionId'] = UNIFIED_SESSION_ID
-                                    f.write(json.dumps(data) + '\n')
-                                    lines_added += 1
-                                except json.JSONDecodeError:
-                                    pass
-
-                    logger.info(f"  ✅ Sincronizadas {lines_added} linhas de {source_file.name}")
-
-                self.last_processed[str(source_file)] = current_size
-
-        except Exception as e:
-            logger.error(f"  ❌ Erro ao sincronizar {source_file.name}: {e}")
-        finally:
-            self.processing_files.discard(str(source_file))
-
-        return lines_added
+        """DESABILITADO - não sincroniza mais arquivos do terminal"""
+        logger.debug(f"⛔ Sincronização DESABILITADA para {source_file.name}")
+        # Apenas marca como processado sem fazer nada
+        if source_file.exists():
+            self.last_processed[str(source_file)] = source_file.stat().st_size
+        return 0
 
     async def monitor_async(self) -> None:
         """Monitor assíncrono - agora apenas observa, não consolida"""
@@ -258,37 +219,9 @@ class UnifiedSessionManager:
         }
 
     def force_consolidate_file(self, source_file: Path) -> bool:
-        """Força consolidação completa de um arquivo e o deleta"""
-        try:
-            if not source_file.exists():
-                return False
-
-            lines_moved = []
-            with open(source_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        try:
-                            data = json.loads(line)
-                            data['sessionId'] = UNIFIED_SESSION_ID
-                            lines_moved.append(json.dumps(data) + '\n')
-                        except json.JSONDecodeError:
-                            pass
-
-            if lines_moved:
-                with open(self.unified_file, 'a', encoding='utf-8') as f:
-                    f.writelines(lines_moved)
-
-                logger.info(f"✅ Movidas {len(lines_moved)} linhas de {source_file.name}")
-
-            # Deleta arquivo original
-            source_file.unlink()
-            logger.info(f"🗑️ Arquivo {source_file.name} deletado")
-
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Erro ao consolidar {source_file.name}: {e}")
-            return False
+        """DESABILITADO - não consolida mais arquivos do terminal"""
+        logger.warning(f"⛔ Consolidação DESABILITADA - arquivo {source_file.name} mantido separado")
+        return False
 
 
 # Removida classe FileWatchHandler - usando monitoramento assíncrono direto
