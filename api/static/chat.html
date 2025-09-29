@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Chat - Sessão Isolada</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .session-info {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .badge-web {
+            background: #E3F2FD;
+            color: #1976D2;
+            border: 1px solid #1976D2;
+        }
+
+        .badge-protected {
+            background: #E8F5E9;
+            color: #388E3C;
+            border: 1px solid #388E3C;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #F5F5F5;
+            border-radius: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Chat Container */
+        .chat-container {
+            flex: 1;
+            max-width: 900px;
+            width: 100%;
+            margin: 2rem auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Messages Area */
+        .messages-area {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            background: #FAFAFA;
+            min-height: 400px;
+        }
+
+        .message {
+            margin-bottom: 1.5rem;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-user {
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .message-assistant {
+            display: flex;
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            word-wrap: break-word;
+        }
+
+        .message-user .message-content {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-assistant .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #E0E0E0;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: #999;
+            margin-top: 0.25rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+
+        .empty-state h2 {
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Input Area */
+        .input-area {
+            background: white;
+            border-top: 1px solid #E0E0E0;
+            padding: 1.5rem;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        #messageInput {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #E0E0E0;
+            border-radius: 8px;
+            font-size: 1rem;
+            resize: vertical;
+            min-height: 50px;
+            max-height: 150px;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+
+        #messageInput:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .char-counter {
+            position: absolute;
+            bottom: -20px;
+            right: 0;
+            font-size: 0.75rem;
+            color: #999;
+        }
+
+        #sendBtn {
+            padding: 0.75rem 2rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        #sendBtn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        #sendBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Loading Animation */
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 1rem 1.25rem;
+            background: white;
+            border: 1px solid #E0E0E0;
+            border-radius: 12px;
+            border-bottom-left-radius: 4px;
+            width: fit-content;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+
+        /* Stats Bar */
+        .stats-bar {
+            background: #F5F5F5;
+            padding: 0.75rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid #E0E0E0;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .action-btn {
+            padding: 0.5rem 1rem;
+            background: white;
+            border: 1px solid #E0E0E0;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .action-btn:hover {
+            background: #F5F5F5;
+            border-color: #667eea;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                padding: 1rem;
+            }
+
+            .chat-container {
+                margin: 1rem;
+                border-radius: 8px;
+            }
+
+            .message-content {
+                max-width: 85%;
+            }
+
+            .stats-bar {
+                flex-direction: column;
+                gap: 0.5rem;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <h1>🚀 Claude Chat</h1>
+        <div class="session-info">
+            <span class="badge badge-web">🌐 Sessão Web</span>
+            <span class="badge badge-protected">🔒 Protegida</span>
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="status">Conectado</span>
+            </div>
+        </div>
+        <div class="action-buttons">
+            <button class="action-btn" onclick="clearChat()">🗑️ Limpar</button>
+            <button class="action-btn" onclick="exportChat()">💾 Exportar</button>
+            <button class="action-btn" onclick="location.reload()">🔄 Atualizar</button>
+        </div>
+    </div>
+
+    <!-- Chat Container -->
+    <div class="chat-container">
+        <!-- Messages Area -->
+        <div id="messagesArea" class="messages-area">
+            <div class="empty-state">
+                <h2>👋 Bem-vindo ao Claude Chat</h2>
+                <p>Digite uma mensagem para começar a conversa</p>
+                <p style="margin-top: 1rem; font-size: 0.85rem;">
+                    Sessão: <code>00000000-0000-0000-0000-000000000001</code>
+                </p>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea
+                        id="messageInput"
+                        placeholder="Digite sua mensagem... (Ctrl+Enter para enviar)"
+                        rows="1"
+                    ></textarea>
+                    <span class="char-counter">0 / 4000</span>
+                </div>
+                <button id="sendBtn" onclick="sendMessage()">
+                    <span>Enviar</span>
+                    <span>➤</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                💬 <span class="stat-value" id="messageCount">0</span> mensagens
+            </div>
+            <div class="stat-item">
+                🔥 <span class="stat-value" id="tokenCount">0</span> tokens
+            </div>
+            <div class="stat-item">
+                ⏱️ <span class="stat-value" id="responseTime">-</span> ms
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuração
+        const API_URL = 'http://localhost:3082/api';
+        const SESSION_ID = '00000000-0000-0000-0000-000000000001';
+
+        let messageCount = 0;
+        let tokenCount = 0;
+        let isStreaming = false;
+
+        // Auto-resize textarea
+        const messageInput = document.getElementById('messageInput');
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+
+            // Update char counter
+            const charCount = this.value.length;
+            document.querySelector('.char-counter').textContent = `${charCount} / 4000`;
+
+            // Limit characters
+            if (charCount > 4000) {
+                this.value = this.value.substring(0, 4000);
+            }
+        });
+
+        // Ctrl+Enter to send
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Send message
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message || isStreaming) return;
+
+            // Clear input
+            input.value = '';
+            input.style.height = 'auto';
+            document.querySelector('.char-counter').textContent = '0 / 4000';
+
+            // Remove empty state
+            const emptyState = document.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            // Add user message
+            addMessage(message, 'user');
+
+            // Show typing indicator
+            showTyping();
+
+            // Update status
+            updateStatus('Enviando...');
+            isStreaming = true;
+            document.getElementById('sendBtn').disabled = true;
+
+            const startTime = Date.now();
+
+            try {
+                // First, write the user message to session file
+                const writeResponse = await fetch(`${API_URL}/web-chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        content: message,
+                        role: 'user',
+                        source: 'web',
+                        timestamp: new Date().toISOString(),
+                        session_id: SESSION_ID
+                    })
+                });
+
+                if (!writeResponse.ok) throw new Error('Erro ao enviar mensagem');
+
+                // Hide typing indicator after delay (simulate thinking)
+                setTimeout(() => {
+                    hideTyping();
+
+                    // Simulated assistant response
+                    const responses = [
+                        "Olá! Recebi sua mensagem. Como posso ajudar você hoje?",
+                        "Interessante! Pode me contar mais sobre isso?",
+                        "Entendi seu ponto. Vamos explorar isso juntos!",
+                        "Ótima pergunta! Deixe-me pensar sobre isso...",
+                        "Obrigado por compartilhar! Isso é muito útil."
+                    ];
+
+                    const assistantMessage = responses[Math.floor(Math.random() * responses.length)];
+                    addMessage(assistantMessage, 'assistant');
+
+                    // Write assistant response to session
+                    fetch(`${API_URL}/web-chat`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            content: assistantMessage,
+                            role: 'assistant',
+                            source: 'web',
+                            timestamp: new Date().toISOString(),
+                            session_id: SESSION_ID
+                        })
+                    });
+
+                    // Update stats
+                    const responseTime = Date.now() - startTime;
+                    document.getElementById('responseTime').textContent = responseTime;
+                    updateStatus('Conectado');
+
+                    isStreaming = false;
+                    document.getElementById('sendBtn').disabled = false;
+
+                }, 1500);
+
+            } catch (error) {
+                hideTyping();
+                addMessage('Erro ao enviar mensagem. Verifique se a API está rodando.', 'error');
+                updateStatus('Erro');
+                isStreaming = false;
+                document.getElementById('sendBtn').disabled = false;
+            }
+        }
+
+        // Add message to chat
+        function addMessage(content, type) {
+            const messagesArea = document.getElementById('messagesArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message message-${type}`;
+
+            const now = new Date();
+            const time = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    ${content}
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+
+            messagesArea.appendChild(messageDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+
+            // Update stats
+            if (type !== 'error') {
+                messageCount++;
+                tokenCount += Math.floor(content.length / 4); // Rough estimate
+                document.getElementById('messageCount').textContent = messageCount;
+                document.getElementById('tokenCount').textContent = tokenCount;
+            }
+        }
+
+        // Show typing indicator
+        function showTyping() {
+            const messagesArea = document.getElementById('messagesArea');
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'typingIndicator';
+            typingDiv.className = 'message message-assistant';
+            typingDiv.innerHTML = `
+                <div class="typing-indicator">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            `;
+            messagesArea.appendChild(typingDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+
+        // Hide typing indicator
+        function hideTyping() {
+            const typing = document.getElementById('typingIndicator');
+            if (typing) typing.remove();
+        }
+
+        // Update status
+        function updateStatus(status) {
+            document.getElementById('status').textContent = status;
+        }
+
+        // Clear chat
+        function clearChat() {
+            if (!confirm('Tem certeza que deseja limpar o chat?')) return;
+
+            const messagesArea = document.getElementById('messagesArea');
+            messagesArea.innerHTML = `
+                <div class="empty-state">
+                    <h2>👋 Chat Limpo</h2>
+                    <p>Digite uma mensagem para começar nova conversa</p>
+                    <p style="margin-top: 1rem; font-size: 0.85rem;">
+                        Sessão: <code>00000000-0000-0000-0000-000000000001</code>
+                    </p>
+                </div>
+            `;
+
+            // Reset stats
+            messageCount = 0;
+            tokenCount = 0;
+            document.getElementById('messageCount').textContent = '0';
+            document.getElementById('tokenCount').textContent = '0';
+            document.getElementById('responseTime').textContent = '-';
+        }
+
+        // Export chat
+        function exportChat() {
+            const messages = [];
+            document.querySelectorAll('.message').forEach(msg => {
+                const content = msg.querySelector('.message-content')?.textContent;
+                if (content) {
+                    messages.push({
+                        type: msg.classList.contains('message-user') ? 'user' : 'assistant',
+                        content: content.trim(),
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            });
+
+            const blob = new Blob([JSON.stringify(messages, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat-export-${Date.now()}.json`;
+            a.click();
+        }
+
+        // Check API status on load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                if (response.ok) {
+                    updateStatus('Conectado');
+                } else {
+                    updateStatus('API Offline');
+                }
+            } catch {
+                updateStatus('API Offline');
+            }
+        });
+    </script>
+</body>
+</html>
